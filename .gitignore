@@ -24,3 +24,6 @@ aetheria-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+# IntelliJ idea folder.
+.idea/
