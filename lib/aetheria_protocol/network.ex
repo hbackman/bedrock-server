@@ -1,2 +1,0 @@
-defmodule AetheriaProtocol.Network do
-end

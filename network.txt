@@ -1,0 +1,38 @@
+# Real Minecraft Unconnected Ping
+
+0000   02 00 00 00 45 00 00 a2 9d 01 00 00 80 11 00 00   ....E...........
+0010   64 6d ae 51 64 6d ae 51 4a bc e7 b7 00 8e d6 bf   dm.Qdm.QJ.......
+0020   1c 00 00 00 00 00 3d 6c 42 91 65 29 79 de 52 9c   ......=lB.e)y.R.
+0030   73 00 ff ff 00 fe fe fe fe fd fd fd fd 12 34 56   s.............4V
+0040   78 00 63 4d 43 50 45 3b 44 65 64 69 63 61 74 65   x.cMCPE;Dedicate
+0050   64 20 53 65 72 76 65 72 3b 35 36 38 3b 31 2e 31   d Server;568;1.1
+0060   39 2e 36 33 3b 30 3b 31 30 3b 31 30 34 37 36 38   9.63;0;10;104768
+0070   32 35 37 31 31 35 34 35 30 36 34 35 36 33 3b 42   25711545064563;B
+0080   65 64 72 6f 63 6b 20 6c 65 76 65 6c 3b 53 75 72   edrock level;Sur
+0090   76 69 76 61 6c 3b 31 3b 31 39 31 33 32 3b 31 39   vival;1;19132;19
+00a0   31 33 33 3b 30 3b                                 133;0;
+
+
+# Local
+
+0000   02 00 00 00 45 00 00 8c 15 85 00 00 80 11 00 00   ....E...........
+0010   c0 a8 01 08 c0 a8 01 08 4a bc e7 b7 00 78 be 54   ........J....x.T
+0020   1c 00 00 00 00 00 3e 47 91 01 86 b9 93 0a 95 aa   ......>G........
+0030   d8 00 ff ff 00 fe fe fe fe fd fd fd fd 12 34 56   ..............4V
+0040   78 4d 43 50 45 3b 41 20 6d 69 6e 65 63 72 61 66   xMCPE;A minecraf
+0050   74 20 73 65 72 76 65 72 2e 3b 35 36 38 3b 31 2e   t server.;568;1.
+0060   31 39 2e 36 33 3b 31 3b 31 30 3b 30 3b 4d 69 6e   19.63;1;10;0;Min
+0070   65 63 72 61 66 74 3b 43 72 65 61 74 69 76 65 3b   ecraft;Creative;
+0080   30 3b 31 39 31 33 32 3b 31 39 31 33 32 3b 30 3b   0;19132;19132;0;
+
+
+# Real Minecraft Connection Reply
+
+0000   06 00 ff ff 00 fe fe fe fe fd fd fd fd 12 34 56   ..............4V
+0010   78 9c 7c 76 f0 aa 14 82 97 00 05 78               x.|v.......x
+
+- RakNet Offline Message ID
+- RakNet Offline message data ID
+- RakNet Server GUID
+- RakNet Use encryption: False
+- RakNet MTU size: 1400
