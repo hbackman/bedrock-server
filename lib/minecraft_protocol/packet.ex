@@ -2,44 +2,10 @@ defmodule BedrockProtocol.Packet do
 
   alias BedrockProtocol.Message
 
-  defstruct [
-    :message_id,
-    :message_time,
-    message_data: "",
-  ]
-
   @moduledoc """
   Base serialization and deserialization routines for packets.
   """
   use Bitwise
-
-  @doc """
-  Construct a new packet.
-  """
-  def new(attributes \\ %{}) do
-    struct(%__MODULE__{}, attributes)
-  end
-
-  @doc """
-  Add data to the packet.
-  """
-  def add(packet, data) do
-    Map.put(packet, :message_data, packet.message_data <> data)
-  end
-
-  @doc """
-  Compiles the packet into a binary string.
-  """
-  def to_binary(packet) do
-    message_head = <<
-      Message.binary(packet.message_id),
-      packet.message_time::size(64),
-      Message.unique_id()::binary,
-      Message.offline()::binary
-    >>
-    message_body = packet.message_data
-    message_head <> message_body
-  end
 
   @doc """
   Decodes a variable-size integer.
@@ -76,32 +42,41 @@ defmodule BedrockProtocol.Packet do
   def encode_bool(false), do: <<0>>
   def encode_bool(true),  do: <<1>>
 
+  def encode_uint16(value) do
+    little_endian(<<value::little-size(16)>>)
+  end
+
+  def encode_uint8(value) do
+    little_endian(<<value::little-size(8)>>)
+  end
+
+  defp little_endian(value) do
+    value
+      |> :binary.decode_unsigned(:big)
+      |> :binary.encode_unsigned(:little)
+  end
+
   @doc """
-  Encodes a variable-size integer.
+  Encodes an ip address.
   """
-  def encode_varint(value) when value in -2_147_483_648..2_147_483_647 do
-    <<value::32-unsigned>> = <<value::32-signed>>
-    encode_varint(value, 0, "")
-  end
+  def encode_ip(4, address, port) do
+    {a1, a2, a3, a4} = address
 
-  def encode_varint(_) do
-    {:error, :too_large}
-  end
-
-  defp encode_varint(value, _, acc) when value <= 127 do
-    <<acc::binary, 0::1, value::7>>
-  end
-
-  defp encode_varint(value, num_write, acc) when value > 127 and num_write < 5 do
-    encode_varint(value >>> 7, num_write + 1, <<acc::binary, 1::1, band(value, 0x7F)::7>>)
+    encode_uint8(4)     <>
+    <<255-a1::size(8)>> <>
+    <<255-a2::size(8)>> <>
+    <<255-a3::size(8)>> <>
+    <<255-a4::size(8)>> <>
+    encode_uint16(port)
   end
 
   @doc """
   Encodes a string.
   """
   def encode_string(string) do
-    strlen = encode_varint(byte_size(string))
-    <<strlen::binary, string::binary>>
+    #strlen = encode_varint(byte_size(string))
+    #<<strlen::binary, string::binary>>
+    <<string::binary>>
   end
 
 end

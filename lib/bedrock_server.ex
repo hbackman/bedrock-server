@@ -25,19 +25,17 @@ defmodule BedrockServer do
 
     {:ok, %{
       port: port,
-      guid: "9678417481104635870",
+      guid: <<0x8d, 0xe7, 0xee, 0x79, 0x41, 0xe6, 0xf2, 0xce>>,
     }}
   end
 
-  @doc """
-  Send a UDP packet.
-  """
+  # Send a UDP packet.
   defp respond({socket, host, port}, data) do
     :gen_udp.send(socket, host, port, data)
   end
 
   # Handle incoming udp data.
-  def handle_info({:udp, socket, host, port, data} = conn, context) do
+  def handle_info({:udp, socket, host, port, data}, context) do
     {:ok, name, data} = decode_packet(data)
 
     {:ok} = handle_packet(context, {socket, host, port}, name, data)
@@ -72,16 +70,55 @@ defmodule BedrockServer do
   end
 
   # Handle the open connection request.
-  defp handle_packet(ctx, client, :id_open_connection_request_1, data) do
-    <<ping_time::size(64), _::binary>> = data
+  defp handle_packet(ctx, client, :id_open_connection_request_1, _) do
 
-    message_head = <<
+    # RakNet Offline Message ID: Open Connection Reply 1 (0x06)
+    # RakNet Offline Message Data ID: 00ffff00fefefefefdfdfdfd12345678
+    # RakNet Server GUID: 8de7ee7941e6f2ce
+    # RakNet Use encryption: false
+    # RakNet MTU size: 1400
+
+    IO.puts ":open_connection_request_1"
+
+    message = <<
       Message.binary(:id_open_connection_reply_1),
-      ping_time::size(64),
-      Message.unique_id()::binary,
-    >>
+      Message.offline()::binary,
+    >> <> ctx.guid
+       <> Packet.encode_bool(false)
+       <> Packet.encode_uint16(1400)
+       |> Hexdump.inspect
 
-    respond(client, message_head)
+    respond(client, message)
+
+    {:ok}
+  end
+
+  # Handle the open connection request 2.
+  defp handle_packet(ctx, client, :id_open_connection_request_2, _) do
+
+    IO.puts ":open_connection_request_2"
+
+    # RakNet Offline Message ID: Open Connection Reply 2 (0x08)
+    # RakNet Offline Message Data ID
+    # RakNet Server GUID
+    # RakNet Client address:
+    #   - IP Version: 4
+    #   - Ipv4 Address: 127.0.0.1
+    #   - Port: 56685
+    # RakNet MTU size: 1400
+
+    {_, host, port} = client
+
+    message = <<
+      Message.binary(:id_open_connection_reply_2),
+      Message.offline()::binary,
+    >> <> ctx.guid
+       <> Packet.encode_ip(4, host, port)
+       <> Packet.encode_uint16(1400)
+       <> Packet.encode_bool(false)
+       |> Hexdump.inspect
+
+    respond(client, message)
 
     {:ok}
   end
