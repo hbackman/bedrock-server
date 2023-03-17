@@ -42,19 +42,14 @@ defmodule BedrockProtocol.Packet do
   def encode_bool(false), do: <<0>>
   def encode_bool(true),  do: <<1>>
 
-  def encode_uint16(value) do
-    little_endian(<<value::little-size(16)>>)
-  end
+  def encode_uint24(value),
+    do: <<value::big-size(24)>>
 
-  def encode_uint8(value) do
-    little_endian(<<value::little-size(8)>>)
-  end
+  def encode_uint16(value),
+    do: <<value::big-size(16)>>
 
-  defp little_endian(value) do
-    value
-      |> :binary.decode_unsigned(:big)
-      |> :binary.encode_unsigned(:little)
-  end
+  def encode_uint8(value),
+    do: <<value::big-size(8)>>
 
   @doc """
   Encodes an ip address.
@@ -77,6 +72,27 @@ defmodule BedrockProtocol.Packet do
     #strlen = encode_varint(byte_size(string))
     #<<strlen::binary, string::binary>>
     <<string::binary>>
+  end
+
+  @doc """
+  Encodes a sequence number. These are three bytes in size.
+  """
+  def encode_seq_number(num) do
+    encode_uint24(num)
+  end
+
+  @doc """
+  Encodes a message id.
+  """
+  def encode_msg(id) do
+    <<Message.binary(id)>>
+  end
+
+  @doc """
+  Encodes a packet flag.
+  """
+  def encode_flag(flag) when flag <= 255 do
+    encode_uint8(flag)
   end
 
 end
