@@ -5,7 +5,53 @@ defmodule BedrockProtocol.Packet do
   @moduledoc """
   Base serialization and deserialization routines for packets.
   """
-  use Bitwise
+  import Bitwise
+
+  def decode_packets(data, packets \\ [])
+  def decode_packets("", packets) do
+    Enum.reverse(packets)
+  end
+
+  def decode_packets(data, packets) do
+    {packet, rest} = decode_encapsulated(data)
+    decode_packets(rest, [packet | packets])
+  end
+
+  @doc """
+  Decode encapsulated messages.
+  """
+  def decode_encapsulated(data) do
+    # Decode reliability.
+    <<
+      _rel::unsigned-size(3),
+      _spt::unsigned-size(5),
+      data::binary
+    >> = data
+
+    # Decode the length.
+    <<length::size(16), data::binary>> = data
+
+    # Decode message index.
+    <<_msg_index::little-size(24), data::binary>> = data
+
+    # Decode message ordering.
+    #<<
+    #  _org_index::little-size(24),
+    #  _ord_channel::size(8),
+    #  data::binary
+    #>> = data
+
+    # Decode the message.
+    len = trunc(Float.ceil(length / 8))
+
+    <<
+      msg_id::binary-size(1),
+      msg_bf::binary-size(len - 1),
+      data::binary
+    >> = data
+    
+    {{Message.name(msg_id), msg_bf}, data}
+  end
 
   @doc """
   Decodes a variable-size integer.
@@ -35,6 +81,31 @@ defmodule BedrockProtocol.Packet do
     <<string::binary-size(strlen), rest::binary>> = data
     {string, rest}
   end
+
+  @doc """
+  Encode encapsulated messages.
+  """
+  def encode_encapsulated(packets) when is_list(packets) do
+    header = <<>>
+      <> encode_msg(:data_packet_4)
+      <> encode_seq_number(0)
+
+    message = Enum.reduce(packets, <<>>, fn packet, msg ->
+      len = bit_size(packet)
+
+      msg <> encode_flag(0x60)  # RakNet Message flags
+          <> encode_uint16(len) # RakNet Payload length
+          <> encode_uint24(0)   # RakNet Reliable message ordering
+          <> encode_uint24(0)   # RakNet Message ordering index
+          <> encode_uint8(0)    # RakNet Message ordering channel
+          <> packet
+    end)
+
+    header <> message
+  end
+
+  def encode_encapsulated(packets) when is_bitstring(packets),
+    do: encode_encapsulated([packets])
 
   @doc """
   Encodes a boolean.
