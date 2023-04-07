@@ -27,3 +27,6 @@ aetheria-*.tar
 
 # IntelliJ idea folder.
 .idea/
+
+# ElixirLS folder.
+.elixir_ls/
