@@ -17,14 +17,6 @@ end
 
 ---
 
-
-https://github.com/CloudburstMC/Server
-
-Server boots in CloudServer::boot() [334]
-
-Server ticks in CloudServer::tickProcessor() [741]
-
-
 ### Usage
 
 Start an iex session with:
@@ -49,3 +41,11 @@ Windows:
 ```console
 ncat.exe -u 172.19.221.219 19132
 ```
+
+### Todo
+
+- [ ] Packet encapsulation.
+  - [ ] Encoding
+  - [x] Decoding
+- [ ] Packet reliability.
+- [ ] Packet priority.

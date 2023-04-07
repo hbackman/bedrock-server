@@ -7,6 +7,33 @@ defmodule BedrockProtocol.Packet do
   """
   import Bitwise
 
+  # ------------------------------------------------------------
+  # Macros
+  # ------------------------------------------------------------
+
+  defmacro timestamp do
+    quote do: size(64)
+  end
+
+  defmacro ip(version) do
+    case version do
+      4 -> quote do: size(56)
+      6 -> quote do: nil # todo
+    end
+  end
+  
+  defmacro id() do
+    quote do: size(8)
+  end
+
+  defmacro uint8 do
+    quote do: big-size(8)
+  end
+
+  # ------------------------------------------------------------
+  # Decode
+  # ------------------------------------------------------------
+
   def decode_packets(data, packets \\ [])
   def decode_packets("", packets) do
     Enum.reverse(packets)
@@ -81,6 +108,10 @@ defmodule BedrockProtocol.Packet do
     <<string::binary-size(strlen), rest::binary>> = data
     {string, rest}
   end
+
+  # ------------------------------------------------------------
+  # Encode
+  # ------------------------------------------------------------
 
   @doc """
   Encode encapsulated messages.
@@ -164,6 +195,13 @@ defmodule BedrockProtocol.Packet do
   """
   def encode_flag(flag) when flag <= 255 do
     encode_uint8(flag)
+  end
+
+  @doc """
+  Encodes a timestamp.
+  """
+  def encode_timestamp(time) do
+    <<time::timestamp>>
   end
 
 end

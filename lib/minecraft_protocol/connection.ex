@@ -1,10 +1,11 @@
 defmodule BedrockProtocol.Connection do
   use GenServer, restart: :transient
 
-  require Logger
-
   alias BedrockProtocol.Message
   alias BedrockProtocol.Packet
+
+  require Logger
+  require Packet
 
   @use_security 0
 
@@ -122,21 +123,45 @@ defmodule BedrockProtocol.Connection do
       port: port,
     } = connection
 
-    empty_ip = Packet.encode_ip(4, {255, 255, 255, 255}, 0)
-
     message = <<>>
       <> Packet.encode_msg(:server_handshake)
       <> Packet.encode_ip(4, host, port)
       <> Packet.encode_uint8(0)
-      <> :erlang.list_to_binary(List.duplicate(empty_ip, 10))
-      <> <<time_sent>>
-      <> <<send_pong>>
+      <> :erlang.list_to_binary(List.duplicate(
+        Packet.encode_ip(4, {255, 255, 255, 255}, 0), 10
+      ))
+      <> Packet.encode_timestamp(time_sent)
+      <> Packet.encode_timestamp(send_pong)
       |> Packet.encode_encapsulated
       |> Hexdump.inspect
 
     connection.send.(message)
 
     Logger.debug("Sent server handshake")
+
+    {:noreply, connection}
+  end
+
+  def handle_cast({:client_handshake, _data}, connection) do
+    Logger.debug("Received client handshake")
+
+    # Do nothing.
+
+    {:noreply, connection}
+  end
+
+  def handle_cast({:ack, _data}, connection) do
+    Logger.debug("Received ack")
+
+    # TODO: Implementation
+
+    {:noreply, connection}
+  end
+
+  def handle_cast({:nack, _data}, connection) do
+    Logger.debug("Received nack")
+
+    # TODO: Implementation
 
     {:noreply, connection}
   end
@@ -148,7 +173,7 @@ defmodule BedrockProtocol.Connection do
 
     connection = data
       |> Packet.decode_packets()
-      |> Enum.reduce(connection, fn {msg_id, msg_bf}, conn -> 
+      |> Enum.reduce(connection, fn {msg_id, msg_bf}, conn ->
         {:noreply, conn} = handle_cast({msg_id, msg_bf}, conn)
         conn
       end)
@@ -172,7 +197,7 @@ defmodule BedrockProtocol.Connection do
     #message = message
     #  <> Packet.encode_msg(:server_handshake)
     #  <> Packet.encode_ip(4, host, port)
-    #  <> :erlang.list_to_binary(List.duplicate(empty_ip, 9)) 
+    #  <> :erlang.list_to_binary(List.duplicate(empty_ip, 9))
     #
     #connection.send.(message)
 

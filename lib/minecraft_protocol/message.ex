@@ -4,6 +4,9 @@ defmodule BedrockProtocol.Message do
   @codec_ver 567
 
   @packet_ids %{
+    :connected_ping => 0x00,
+    :connected_pong => 0x03,
+
     # Minecraft will send these to see if it can discover the server. Not replying
     # will prevent the client from joining.
     :unconnected_ping => 0x01,
@@ -21,6 +24,9 @@ defmodule BedrockProtocol.Message do
 
     # Connection was successful.
     :server_handshake => 0x10,
+
+    :client_handshake => 0x13,
+    :client_disconnect => 0x15,
 
     # Connection failed.
     :connection_attempt_failed => 0x11,
