@@ -17,7 +17,7 @@ defmodule BedrockProtocol.Advertisement do
     ipv6Port: -1,
     nintendo: 0,
   ]
-  
+
   @doc """
   Advertisement constructor.
   """
@@ -44,11 +44,7 @@ defmodule BedrockProtocol.Advertisement do
       ad.ipv6Port,
       ad.nintendo,
     ], ";") <> ";"
-
-    <<String.length(buffer)::little-size(16)>>
-      |> :binary.decode_unsigned(:big)
-      |> :binary.encode_unsigned(:little)
-      |> Kernel.<>(buffer)
+    Packet.encode_string(buffer)
   end
 
 end

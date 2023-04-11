@@ -53,7 +53,7 @@ defmodule BedrockServer do
       {:connected,   {client, type, data}} -> handle_packet(socket, config, client, type, data)
       {:unconnected, {client, type, data}} -> handle_packet(socket, config, client, type, data)
     end
-    
+
     {:noreply, config}
   end
 

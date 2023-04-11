@@ -44,8 +44,8 @@ ncat.exe -u 172.19.221.219 19132
 
 ### Todo
 
-- [ ] Packet encapsulation.
-  - [ ] Encoding
+- [x] Packet encapsulation.
+  - [x] Encoding
   - [x] Decoding
 - [ ] Packet reliability.
 - [ ] Packet priority.

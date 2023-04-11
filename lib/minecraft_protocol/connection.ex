@@ -166,6 +166,17 @@ defmodule BedrockProtocol.Connection do
     {:noreply, connection}
   end
 
+  """
+  Handles a connected ping by the client.
+  """
+  def handle_cast({:connected_ping, data}, connection) do
+    <<_ping_time::size(64)>> = data
+
+    # TODO
+
+    {:noreply, connection}
+  end
+
   def handle_cast({:data_packet_4, data}, connection) do
     Logger.debug("Received client connect")
 
@@ -173,8 +184,8 @@ defmodule BedrockProtocol.Connection do
 
     connection = data
       |> Packet.decode_packets()
-      |> Enum.reduce(connection, fn {msg_id, msg_bf}, conn ->
-        {:noreply, conn} = handle_cast({msg_id, msg_bf}, conn)
+      |> Enum.reduce(connection, fn packet, conn ->
+        {:noreply, conn} = handle_cast({packet.message_id, packet.message_buffer}, conn)
         conn
       end)
 

@@ -1,5 +1,6 @@
 defmodule BedrockProtocol.Packet do
 
+  alias BedrockProtocol.Reliability
   alias BedrockProtocol.Message
 
   @moduledoc """
@@ -21,7 +22,7 @@ defmodule BedrockProtocol.Packet do
       6 -> quote do: nil # todo
     end
   end
-  
+
   defmacro id() do
     quote do: size(8)
   end
@@ -49,35 +50,78 @@ defmodule BedrockProtocol.Packet do
   """
   def decode_encapsulated(data) do
     # Decode reliability.
-    <<
-      _rel::unsigned-size(3),
-      _spt::unsigned-size(5),
-      data::binary
-    >> = data
+    <<reliability::unsigned-size(3), has_split::unsigned-size(5), data::binary>> = data
+
+    is_reliable = Reliability.is_reliable?(reliability)
+    is_sequenced = Reliability.is_sequenced?(reliability)
 
     # Decode the length.
     <<length::size(16), data::binary>> = data
+    length = trunc(Float.ceil(length / 8))
 
-    # Decode message index.
-    <<_msg_index::little-size(24), data::binary>> = data
+    # Decode sequence.
+    {message_index, data} =
+      if is_sequenced or is_reliable do
+        <<message_index::little-size(24), rest::binary>> = data
+        {message_index, rest}
+      else
+        {nil, data}
+      end
 
-    # Decode message ordering.
-    #<<
-    #  _org_index::little-size(24),
-    #  _ord_channel::size(8),
-    #  data::binary
-    #>> = data
+    # Decode order.
+    {order_index, order_channel, data} =
+      if is_sequenced do
+        <<order_index::little-size(24), order_channel::size(8), rest::binary>> = data
+        {order_index, order_channel, rest}
+      else
+        {nil, nil, data}
+      end
 
-    # Decode the message.
-    len = trunc(Float.ceil(length / 8))
+    # Decode split.
+    {split_count, split_id, split_index, data} =
+      if has_split > 0 do
+        <<
+          split_count::size(32),
+          split_id   ::size(16),
+          split_index::size(32),
+          rest::binary
+        >> = data
+        {split_count, split_id, split_index, rest}
+      else
+        {nil, nil, nil, data}
+      end
+
+    # Decode buffer.
+    length = length - 1
 
     <<
       msg_id::binary-size(1),
-      msg_bf::binary-size(len - 1),
-      data::binary
+      msg_bf::binary-size(length),
+      rest::binary
     >> = data
-    
-    {{Message.name(msg_id), msg_bf}, data}
+
+    # The message is sometimes a minecraft specific message. This doesnt match anything
+    # in the message module. I will probably have to wait unwrapping the message id so
+    # that a custom packet can implement the lookup.
+
+    {%Reliability.Packet{
+      reliability: '',
+
+      has_split: has_split,
+
+      order_index: order_index,
+      order_channel: order_channel,
+
+      split_id: split_id,
+      split_count: split_count,
+      split_index: split_index,
+
+      sequencing_index: if(is_reliable, do: nil, else: message_index),
+      message_index: if(is_reliable, do: message_index, else: nil),
+      message_length: length,
+      message_id: Message.name(msg_id),
+      message_buffer: msg_bf,
+    }, rest}
   end
 
   @doc """
@@ -139,6 +183,14 @@ defmodule BedrockProtocol.Packet do
     do: encode_encapsulated([packets])
 
   @doc """
+  Encodes a string.
+  """
+  def encode_string(value) when is_bitstring(value) do
+    strlen = encode_uint16(byte_size(value))
+    <<strlen::binary, value::binary>>
+  end
+
+  @doc """
   Encodes a boolean.
   """
   def encode_bool(false), do: <<0>>
@@ -165,15 +217,6 @@ defmodule BedrockProtocol.Packet do
     <<255-a3::size(8)>> <>
     <<255-a4::size(8)>> <>
     encode_uint16(port)
-  end
-
-  @doc """
-  Encodes a string.
-  """
-  def encode_string(string) do
-    #strlen = encode_varint(byte_size(string))
-    #<<strlen::binary, string::binary>>
-    <<string::binary>>
   end
 
   @doc """

@@ -67,10 +67,8 @@ defmodule BedrockProtocol.Message do
   end
 
   def name(message_binary) when is_bitstring(message_binary) do
-    message_binary
-      |> String.to_charlist
-      |> hd
-      |> name
+    <<message_bit, _::binary>> = message_binary
+    name(message_bit)
   end
 
   @doc """
