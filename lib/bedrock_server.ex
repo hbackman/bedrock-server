@@ -3,10 +3,10 @@ defmodule BedrockServer do
 
   require Logger
 
-  alias BedrockProtocol.Message
-  alias BedrockProtocol.Packet
-  alias BedrockProtocol.Connection
-  alias BedrockProtocol.Advertisement
+  alias RakNet.Message
+  alias RakNet.Packet
+  alias RakNet.Connection
+  alias RakNet.Advertisement
 
   # Use a factory to start up the server. This runs from the caller context.
   def start_link(port) do

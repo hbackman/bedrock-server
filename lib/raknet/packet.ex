@@ -1,7 +1,7 @@
-defmodule BedrockProtocol.Packet do
+defmodule RakNet.Packet do
 
-  alias BedrockProtocol.Reliability
-  alias BedrockProtocol.Message
+  alias RakNet.Reliability
+  alias RakNet.Message
 
   @moduledoc """
   Base serialization and deserialization routines for packets.

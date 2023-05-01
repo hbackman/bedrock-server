@@ -1,12 +1,12 @@
 defmodule ConnectionTest do
   use ExUnit.Case
 
-  alias BedrockProtocol.Connection
-  alias BedrockProtocol.Packet
+  alias RakNet.Connection
+  alias RakNet.Packet
 
   import Packet
 
-  doctest BedrockProtocol.Connection
+  doctest RakNet.Connection
 
   defp new_connection() do
     %Connection.State{

@@ -1,9 +1,9 @@
-defmodule BedrockProtocol.Connection do
+defmodule RakNet.Connection do
   use GenServer, restart: :transient
 
-  alias BedrockProtocol.Message
-  alias BedrockProtocol.Packet
-  alias BedrockProtocol.Reliability
+  alias RakNet.Message
+  alias RakNet.Packet
+  alias RakNet.Reliability
 
   require Logger
   require Packet

@@ -9,7 +9,7 @@ defmodule BedrockServer.Application do
 
     Supervisor.start_link([
       {BedrockServer, 19132},
-      {Registry, keys: :unique, name: BedrockProtocol.Connection},
+      {Registry, keys: :unique, name: RakNet.Connection},
     ], opts)
   end
 end

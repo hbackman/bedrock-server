@@ -1,3 +1,0 @@
-defmodule BedrockProtocol do
-  
-end

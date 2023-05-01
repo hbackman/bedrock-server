@@ -1,4 +1,4 @@
-defmodule BedrockProtocol.Message do
+defmodule RakNet.Message do
 
   # The current codex version.
   @codec_ver 567

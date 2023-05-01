@@ -1,6 +1,6 @@
-defmodule BedrockProtocol.Advertisement do
+defmodule RakNet.Advertisement do
 
-  alias BedrockProtocol.Packet
+  alias RakNet.Packet
 
   defstruct [
     edition: "MCPE",
