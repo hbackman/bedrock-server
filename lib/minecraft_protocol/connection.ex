@@ -3,11 +3,15 @@ defmodule BedrockProtocol.Connection do
 
   alias BedrockProtocol.Message
   alias BedrockProtocol.Packet
+  alias BedrockProtocol.Reliability
 
   require Logger
   require Packet
 
   @use_security 0
+
+  @sync_ms 10
+  @ping_ms 5000
 
   defmodule State do
     defstruct [
@@ -15,10 +19,13 @@ defmodule BedrockProtocol.Connection do
       port: nil,
       send: nil,
       server_identifier: nil,
+      packet_buffer: [],
+      packet_sequence: 0,
     ]
   end
 
   def init(state) do
+    {:ok, _} = :timer.send_interval(@sync_ms, :sync)
     {:ok, state}
   end
 
@@ -34,12 +41,14 @@ defmodule BedrockProtocol.Connection do
   """
   def stop(connection_pid), do: GenServer.stop(connection_pid, :shutdown)
 
-  @doc """
-  Send a message to the connection.
-  """
-  def send(connection_pid, message) do
-    GenServer.cast(connection_pid, {:send, message})
-    {:ok, nil}
+  def handle_info(:sync, connection) do
+    {:noreply, connection
+      |> sync_enqueued_packets()
+    }
+  end
+
+  def handle_info(:ping, connection) do
+
   end
 
   @doc """
@@ -49,22 +58,54 @@ defmodule BedrockProtocol.Connection do
     GenServer.cast(connection_pid, {message_type, data})
   end
 
-  def handle_info(:send, message) do
-    IO.inspect message
-    {:noreply, nil}
+  defp enqueue(connection, reliability, buffer) when is_atom(reliability) and is_bitstring(buffer),
+    do: enqueue(connection, reliability, [buffer])
+
+  defp enqueue(connection, reliability, buffers) when is_atom(reliability) and is_list(buffers) do
+    num_buffers = length(buffers)
+    new_buffers = buffers
+      |> Enum.zip(0..(num_buffers - 1))
+      |> Enum.map(fn {buffer, idx} ->
+        %Reliability.Packet{
+          reliability: reliability,
+          message_buffer: buffer,
+          message_index: if(Reliability.is_reliable?(reliability), do: connection.message_index, else: nil),
+        }
+      end)
+
+    %{ connection |
+      packet_buffer: connection.packet_buffer ++ new_buffers,
+      packet_sequence: connection.packet_sequence + num_buffers
+    }
   end
 
+  defp sync_enqueued_packets(connection) do
+    IO.inspect "TEST"
+
+    connection
+  end
+
+  # Handles a :open_connection_request_1 message.
+  #
+  # | Field Name       | Type  | Notes        |
+  # |------------------|-------|--------------|
+  # | Packet ID        | i8    | 0x06         |
+  # | Offline          | magic |              |
+  # | Protocol Version | i8    | Currently 11 |
+  # | MTU              | null  | Null padding |
   def handle_cast({:open_connection_request_1, _data}, connection) do
     Logger.debug("Received open connection request 1")
 
-    # RakNet Offline Message ID: Open Connection Reply 1 (0x06)
-    # RakNet Offline Message Data ID: 00ffff00fefefefefdfdfdfd12345678
-    # RakNet Server GUID: 8de7ee7941e6f2ce
-    # RakNet Use encryption: false
-    # RakNet MTU size: 1400
+    # | Field Name | Type  | Notes                    |
+    # |------------|-------|--------------------------|
+    # | Packet ID  | i8    | 0x06                     |
+    # | Offline    | magic |                          |
+    # | Server ID  | i64   |                          |
+    # | Security   | bool  | This is false.           |
+    # | MTU        | i16   | This is the MTU length.  |
 
     message = <<>>
-      <> Message.binary(:open_connection_reply_1, true)
+      <> Packet.encode_msg(:open_connection_reply_1)
       <> Message.offline()
       <> connection.server_identifier
       <> Packet.encode_bool(false)
@@ -75,25 +116,34 @@ defmodule BedrockProtocol.Connection do
 
     Logger.debug("Sent open connection reply 1")
 
-    {:noreply, connection}
+    {:noreply, enqueue(connection, :unreliable_sequenced, message)}
   end
 
+  # Handles a :open_connection_request_2 message.
+  #
+  # | Field Name  | Type  | Notes |
+  # |-------------|-------|-------|
+  # | Packet ID   | i8    | 0x07  |
+  # | Offline     | magic |       |
+  # | Server Addr | addr  |       |
+  # | MTU         | i16   |       |
+  # | Client ID   | i64   |       |
   def handle_cast({:open_connection_request_2, _data}, connection) do
     Logger.debug("Received open connection request 2")
-
-    # RakNet Offline Message ID: Open Connection Reply 2 (0x08)
-    # RakNet Offline Message Data ID
-    # RakNet Server GUID
-    # RakNet Client address:
-    #   - IP Version: 4
-    #   - Ipv4 Address: 127.0.0.1
-    #   - Port: 56685
-    # RakNet MTU size: 1400
 
     %{
       host: host,
       port: port,
     } = connection
+
+    # | Field Name  | Type  | Notes                  |
+    # |-------------|-------|------------------------|
+    # | Packet ID   | i8    | 0x08                   |
+    # | Offline     | magic |                        |
+    # | Server ID   | i64   |                        |
+    # | Client Addr | addr  |                        |
+    # | MTU         | i16   |                        |
+    # | Encryption  | bool  | This is false for now. |
 
     message = <<>>
       <> Message.binary(:open_connection_reply_2, true)
@@ -111,6 +161,15 @@ defmodule BedrockProtocol.Connection do
     {:noreply, connection}
   end
 
+  # Handles a :client_connect message.
+  #
+  # | Field Name | Type | Notes                  |
+  # |------------|------|------------------------|
+  # | Packet ID  | i8   | 0x09                   |
+  # | GUID       | i64  | Not sure what this is. |
+  # | Time       | i64  |                        |
+  # | Security   | i8   | Not sure what this is. |
+  # | Password   | ---- | Maybe related to ^     |
   def handle_cast({:client_connect, data}, connection) do
     Logger.debug("Received client connect")
 
@@ -122,6 +181,15 @@ defmodule BedrockProtocol.Connection do
       host: host,
       port: port,
     } = connection
+
+    # | Field Name   | Type     | Notes                                            |
+    # |--------------|----------|--------------------------------------------------|
+    # | Packet ID    | i8       | 0x10                                             |
+    # | Client Addr  | addr     |                                                  |
+    # | System Index | i8       | Unknown what this does. Zero works.              |
+    # | Internal IDs | addr 10x | Unknown what this does. Empty ips seems to work. |
+    # | Request Time | i64      |                                                  |
+    # | Current Time | i64      |                                                  |
 
     message = <<>>
       <> Packet.encode_msg(:server_handshake)
@@ -142,10 +210,19 @@ defmodule BedrockProtocol.Connection do
     {:noreply, connection}
   end
 
+  # Handles a :client_handshake message.
+  #
+  # | Field Name    | Type | Notes                   |
+  # |---------------|------|-------------------------|
+  # | Server Addr   | addr |                         |
+  # | Internal Addr | addr | Unknown what this does. |
   def handle_cast({:client_handshake, _data}, connection) do
     Logger.debug("Received client handshake")
 
-    # Do nothing.
+    # We do not need to respond to this. However, we should set the connection to
+    # start pinging the client.
+
+    {:ok, _} = :timer.send_interval(@ping_ms, :ping)
 
     {:noreply, connection}
   end
@@ -166,13 +243,32 @@ defmodule BedrockProtocol.Connection do
     {:noreply, connection}
   end
 
-  """
-  Handles a connected ping by the client.
-  """
+  # Handles a :connected_ping by the client.
   def handle_cast({:connected_ping, data}, connection) do
+    Logger.debug("Received connected ping")
+
     <<_ping_time::size(64)>> = data
 
     # TODO
+
+    {:noreply, connection}
+  end
+
+  # Handles a :client_disconnect message.
+  #
+  # | Field Name | Type | Notes |
+  # |------------|------|-------|
+  # | Packet ID  | i8   | 0x13  |
+  def handle_cast({:client_disconnect, _data}, connection) do
+    Logger.debug("Received client disconnect")
+
+    Process.exit(self(), :normal)
+
+    {:noreply, connection}
+  end
+
+  def handle_cast({:game_packet, _data}, connection) do
+    Logger.debug("Received game packet")
 
     {:noreply, connection}
   end
@@ -188,29 +284,6 @@ defmodule BedrockProtocol.Connection do
         {:noreply, conn} = handle_cast({packet.message_id, packet.message_buffer}, conn)
         conn
       end)
-
-    #%{
-    #  host: host,
-    #  port: port,
-    #} = connection
-    #
-    #empty_ip = Packet.encode_ip(4, {255, 255, 255, 255}, 0)
-    #
-    #message = <<>>
-    #  <> Packet.encode_uint8(0x84)   # RakNet Packet type
-    #  <> Packet.encode_seq_number(0) # RakNet Packet sequence
-    #  <> Packet.encode_flag(0x60)    # RakNet Message flags
-    #  <> Packet.encode_uint16(1856)  # RakNet Payload legth
-    #  <> Packet.encode_uint24(0)     # RakNet Reliable message ordering: 0
-    #  <> Packet.encode_uint24(0)     # RakNet Message ordering index
-    #  <> Packet.encode_uint8(0)      # RakNet Message ordering channel
-    #
-    #message = message
-    #  <> Packet.encode_msg(:server_handshake)
-    #  <> Packet.encode_ip(4, host, port)
-    #  <> :erlang.list_to_binary(List.duplicate(empty_ip, 9))
-    #
-    #connection.send.(message)
 
     {:noreply, connection}
   end

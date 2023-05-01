@@ -50,8 +50,11 @@ defmodule BedrockProtocol.Message do
     :data_packet_D => 0x8D,
     :data_packet_E => 0x8E,
     :data_packet_F => 0x8F,
-    :nack          => 0xA0,
-    :ack           => 0xC0
+
+    :nack => 0xA0,
+    :ack  => 0xC0,
+
+    :game_packet   => 0xFE,
   }
 
   # "Magic" bytes used to distinguish offline messages from garbage
