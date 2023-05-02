@@ -30,6 +30,13 @@ defmodule RakNet.Connection do
   end
 
   @doc """
+  Starts the connection without linking.
+  """
+  def start(%State{} = state) do
+    GenServer.start(__MODULE__, state)
+  end
+
+  @doc """
   Instantiate the connection.
   """
   def start_link(%State{} = state) do
@@ -48,7 +55,7 @@ defmodule RakNet.Connection do
   end
 
   def handle_info(:ping, connection) do
-
+    # Do nothing for now.
   end
 
   @doc """
@@ -80,9 +87,16 @@ defmodule RakNet.Connection do
   end
 
   defp sync_enqueued_packets(connection) do
-    IO.inspect "TEST"
+    %{ packet_buffer: buffer } = connection
 
-    connection
+    Enum.each(buffer, fn packet ->
+      # TODO: Encode packet properly
+      connection.send.(packet.message_buffer)
+    end)
+
+    %{ connection |
+      packet_buffer: [],
+    }
   end
 
   # Handles a :open_connection_request_1 message.
@@ -203,11 +217,11 @@ defmodule RakNet.Connection do
       |> Packet.encode_encapsulated
       |> Hexdump.inspect
 
-    connection.send.(message)
+    #connection.send.(message)
 
     Logger.debug("Sent server handshake")
 
-    {:noreply, connection}
+    {:noreply, enqueue(connection, :unreliable, message)}
   end
 
   # Handles a :client_handshake message.

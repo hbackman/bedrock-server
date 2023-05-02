@@ -9,11 +9,12 @@ defmodule ConnectionTest do
   doctest RakNet.Connection
 
   defp new_connection() do
+    here = self()
     %Connection.State{
       host: {127, 0, 0, 1},
       port: 12345,
       send: fn data ->
-        send(self(), {:sent, data})
+        send(here, {:sent, data})
       end,
       server_identifier: <<0x8d, 0xe7, 0xee, 0x79, 0x41, 0xe6, 0xf2, 0xce>>,
     }
@@ -30,7 +31,9 @@ defmodule ConnectionTest do
       <> encode_timestamp(BedrockServer.timestamp())
       <> encode_bool(false)
 
-    Connection.handle_cast({:client_connect, msg}, new_connection())
+    {:ok, pid} = Connection.start(new_connection())
+
+    Connection.handle_message(pid, :client_connect, msg)
 
     # The response is formatted:
     # - message id
@@ -57,7 +60,7 @@ defmodule ConnectionTest do
       # Timestamps.
       _::timestamp,
       _::timestamp,
-    >>}
+    >>}, 500
   end
 
   test ":client_handshake" do
@@ -73,7 +76,9 @@ defmodule ConnectionTest do
       <> <<BedrockServer.timestamp()::timestamp>>
       <> <<BedrockServer.timestamp()::timestamp>>
 
-    Connection.handle_cast({:client_handshake, msg}, new_connection())
+    {:ok, pid} = Connection.start(new_connection())
+
+    Connection.handle_message(pid, :client_handshake, msg)
 
     receive do
       {:sent} -> assert false
