@@ -4,7 +4,6 @@ defmodule BedrockServer do
   require Logger
 
   alias RakNet.Message
-  alias RakNet.Packet
   alias RakNet.Connection
   alias RakNet.Advertisement
 

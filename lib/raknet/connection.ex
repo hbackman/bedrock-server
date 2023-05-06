@@ -72,7 +72,7 @@ defmodule RakNet.Connection do
     num_buffers = length(buffers)
     new_buffers = buffers
       |> Enum.zip(0..(num_buffers - 1))
-      |> Enum.map(fn {buffer, idx} ->
+      |> Enum.map(fn {buffer, _idx} ->
         %Reliability.Packet{
           reliability: reliability,
           message_buffer: buffer,
@@ -281,8 +281,12 @@ defmodule RakNet.Connection do
     {:noreply, connection}
   end
 
-  def handle_cast({:game_packet, _data}, connection) do
+  def handle_cast({:game_packet, data}, connection) do
     Logger.debug("Received game packet")
+
+    # TODO: Allow "a" client to listen to data. Not all clients will use the 0xFE
+    # game packet message id.
+    connection = BedrockServer.Client.recieve(connection, :game_packet, data)
 
     {:noreply, connection}
   end

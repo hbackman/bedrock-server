@@ -127,17 +127,15 @@ defmodule RakNet.Packet do
   @doc """
   Decodes a variable-size integer.
   """
-  def decode_varint(data) do
-    decode_varint(data, 0, 0)
+  def decode_varint(data) when is_binary(data),
+    do: decode_varint(data, 0, 0)
+
+  defp decode_varint(<<1::1, byte::7, rest::binary>>, num_read, acc) when num_read < 5 do
+    decode_varint(rest, num_read + 1, acc + (byte <<< (7 * num_read)))
   end
 
-  defp decode_varint(<<1::1, value::7, rest::binary>>, num_read, acc) when num_read < 5 do
-    decode_varint(rest, num_read + 1, acc + (value <<< (7 * num_read)))
-  end
-
-  defp decode_varint(<<0::1, value::7, rest::binary>>, num_read, acc) do
-    result = acc + (value <<< (7 * num_read))
-    <<result::32-signed>> = <<result::32-unsigned>>
+  defp decode_varint(<<0::1, byte::7, rest::binary>>, num_read, acc) do
+    result = acc + (byte <<< (7 * num_read))
     {result, rest}
   end
 

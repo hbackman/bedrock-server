@@ -1,8 +1,5 @@
 defmodule RakNet.Message do
 
-  # The current codex version.
-  @codec_ver 567
-
   @packet_ids %{
     :connected_ping => 0x00,
     :connected_pong => 0x03,

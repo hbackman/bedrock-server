@@ -1,6 +1,7 @@
-# Aetheria
+# Bedrock Server
 
-**TODO: Add description**
+A Minecraft Bedrock server implementation in Elixir. This is experimental and is not
+ a fully featured minecraft server (yet). Use at your own risk.
 
 ## Installation
 
@@ -17,7 +18,7 @@ end
 
 ---
 
-### Usage
+### Notes
 
 Start an iex session with:
 
@@ -41,11 +42,3 @@ Windows:
 ```console
 ncat.exe -u 172.19.221.219 19132
 ```
-
-### Todo
-
-- [x] Packet encapsulation.
-  - [x] Encoding
-  - [x] Decoding
-- [ ] Packet reliability.
-- [ ] Packet priority.
