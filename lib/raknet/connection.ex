@@ -126,11 +126,9 @@ defmodule RakNet.Connection do
       <> Packet.encode_uint16(1400)
       |> Hexdump.inspect
 
-    connection.send.(message)
+    Logger.debug("Sending open connection reply 1")
 
-    Logger.debug("Sent open connection reply 1")
-
-    {:noreply, enqueue(connection, :unreliable_sequenced, message)}
+    {:noreply, enqueue(connection, :unreliable, message)}
   end
 
   # Handles a :open_connection_request_2 message.
@@ -168,11 +166,9 @@ defmodule RakNet.Connection do
       <> Packet.encode_bool(false)
       |> Hexdump.inspect
 
-    connection.send.(message)
+    Logger.debug("Sending open connection reply 2")
 
-    Logger.debug("Sent open connection reply 2")
-
-    {:noreply, connection}
+    {:noreply, enqueue(connection, :unreliable, message)}
   end
 
   # Handles a :client_connect message.
@@ -216,8 +212,6 @@ defmodule RakNet.Connection do
       <> Packet.encode_timestamp(send_pong)
       |> Packet.encode_encapsulated
       |> Hexdump.inspect
-
-    #connection.send.(message)
 
     Logger.debug("Sent server handshake")
 
