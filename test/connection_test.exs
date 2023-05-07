@@ -28,7 +28,7 @@ defmodule ConnectionTest do
     #   - use_security::size(8)
     msg = <<>>
       <> <<0xbf, 0xfd, 0x76, 0xdc, 0x34, 0x56, 0x4e, 0x7a>>
-      <> encode_timestamp(BedrockServer.timestamp())
+      <> encode_timestamp(RakNet.Server.timestamp())
       <> encode_bool(false)
 
     {:ok, pid} = Connection.start(new_connection())
@@ -73,8 +73,8 @@ defmodule ConnectionTest do
     msg = <<>>
       <> encode_ip(4, {127, 0, 0, 1}, 19132)
       <> encode_ip(4, {127, 0, 0, 1}, 19132)
-      <> <<BedrockServer.timestamp()::timestamp>>
-      <> <<BedrockServer.timestamp()::timestamp>>
+      <> <<RakNet.Server.timestamp()::timestamp>>
+      <> <<RakNet.Server.timestamp()::timestamp>>
 
     {:ok, pid} = Connection.start(new_connection())
 

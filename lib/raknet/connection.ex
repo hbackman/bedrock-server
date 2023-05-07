@@ -1,3 +1,21 @@
+defprotocol RakNet.Client do
+  @doc """
+  Handles a client connecting to the server. This should return the client after
+  making any changes to it.
+  """
+  def connect(client, connection_pid, module_data)
+
+  @doc """
+  Handles an incoming game packet.
+  """
+  def receive(client, packet_type, packet_buffer)
+
+  @doc """
+  Handles a client disconnecting from the server.
+  """
+  def disconnect(client)
+end
+
 defmodule RakNet.Connection do
   use GenServer, restart: :transient
 
@@ -21,9 +39,13 @@ defmodule RakNet.Connection do
       server_identifier: nil,
       packet_buffer: [],
       packet_sequence: 0,
+      client_module: nil,
+      client_data: %{},
+      client: nil,
     ]
   end
 
+  @impl GenServer
   def init(state) do
     {:ok, _} = :timer.send_interval(@sync_ms, :sync)
     {:ok, state}
@@ -48,12 +70,14 @@ defmodule RakNet.Connection do
   """
   def stop(connection_pid), do: GenServer.stop(connection_pid, :shutdown)
 
+  @impl GenServer
   def handle_info(:sync, connection) do
     {:noreply, connection
       |> sync_enqueued_packets()
     }
   end
 
+  @impl GenServer
   def handle_info(:ping, connection) do
     # Do nothing for now.
   end
@@ -140,6 +164,7 @@ defmodule RakNet.Connection do
   # | Server Addr | addr  |       |
   # | MTU         | i16   |       |
   # | Client ID   | i64   |       |
+  @impl GenServer
   def handle_cast({:open_connection_request_2, _data}, connection) do
     Logger.debug("Received open connection request 2")
 
@@ -180,12 +205,13 @@ defmodule RakNet.Connection do
   # | Time       | i64  |                        |
   # | Security   | i8   | Not sure what this is. |
   # | Password   | ---- | Maybe related to ^     |
+  @impl GenServer
   def handle_cast({:client_connect, data}, connection) do
     Logger.debug("Received client connect")
 
     <<_client_id::size(64), time_sent::size(64), @use_security::size(8), _password::binary>> = data
 
-    send_pong = BedrockServer.timestamp()
+    send_pong = RakNet.Server.timestamp()
 
     %{
       host: host,
@@ -224,6 +250,7 @@ defmodule RakNet.Connection do
   # |---------------|------|-------------------------|
   # | Server Addr   | addr |                         |
   # | Internal Addr | addr | Unknown what this does. |
+  @impl GenServer
   def handle_cast({:client_handshake, _data}, connection) do
     Logger.debug("Received client handshake")
 
@@ -232,9 +259,18 @@ defmodule RakNet.Connection do
 
     {:ok, _} = :timer.send_interval(@ping_ms, :ping)
 
-    {:noreply, connection}
+    client = RakNet.Client.connect(
+      # The client protocol implementation wont recognize the module name as the
+      # implementation type, so first we need to make it into a struct.
+      struct(connection.client_module, %{}),
+      self(),
+      connection.client_data
+    )
+
+    {:noreply, %{connection | client: client }}
   end
 
+  @impl GenServer
   def handle_cast({:ack, _data}, connection) do
     Logger.debug("Received ack")
 
@@ -243,6 +279,7 @@ defmodule RakNet.Connection do
     {:noreply, connection}
   end
 
+  @impl GenServer
   def handle_cast({:nack, _data}, connection) do
     Logger.debug("Received nack")
 
@@ -252,6 +289,7 @@ defmodule RakNet.Connection do
   end
 
   # Handles a :connected_ping by the client.
+  @impl GenServer
   def handle_cast({:connected_ping, data}, connection) do
     Logger.debug("Received connected ping")
 
@@ -267,6 +305,7 @@ defmodule RakNet.Connection do
   # | Field Name | Type | Notes |
   # |------------|------|-------|
   # | Packet ID  | i8   | 0x13  |
+  @impl GenServer
   def handle_cast({:client_disconnect, _data}, connection) do
     Logger.debug("Received client disconnect")
 
@@ -275,16 +314,18 @@ defmodule RakNet.Connection do
     {:noreply, connection}
   end
 
+  @impl GenServer
   def handle_cast({:game_packet, data}, connection) do
     Logger.debug("Received game packet")
 
-    # TODO: Allow "a" client to listen to data. Not all clients will use the 0xFE
-    # game packet message id.
-    connection = BedrockServer.Client.recieve(connection, :game_packet, data)
+    # Forward the packet to the RakNet.Client implementation. This will now handle
+    # all further game packets.
+    RakNet.Client.receive(connection.client, :game_packet, data)
 
     {:noreply, connection}
   end
 
+  @impl GenServer
   def handle_cast({:data_packet_4, data}, connection) do
     Logger.debug("Received client connect")
 
