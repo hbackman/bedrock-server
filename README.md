@@ -41,4 +41,4 @@ echo "quit" | nc -u -w0 0.0.0.0 19132
 Windows:
 ```console
 ncat.exe -u 172.19.221.219 19132
-```
+```~

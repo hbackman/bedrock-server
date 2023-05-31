@@ -42,13 +42,9 @@ defmodule RakNet.Connection do
       client_module: nil,
       client_data: %{},
       client: nil,
+      # The :os.system_time(:millisecond) time at which we were created.
+      base_time: 0,
     ]
-  end
-
-  @impl GenServer
-  def init(state) do
-    {:ok, _} = :timer.send_interval(@sync_ms, :sync)
-    {:ok, state}
   end
 
   @doc """
@@ -68,7 +64,35 @@ defmodule RakNet.Connection do
   @doc """
   Terminate the connection.
   """
-  def stop(connection_pid), do: GenServer.stop(connection_pid, :shutdown)
+  def stop(connection_pid),
+    do: GenServer.stop(connection_pid, :shutdown)
+
+  @doc """
+  Send a message to the client.
+  """
+  def send(connection_pid, reliability, message)
+
+  def send(connection_pid, reliability, message) when is_bitstring(message) and is_atom(reliability) do
+    GenServer.cast(connection_pid, {:send, reliability, message})
+    {:ok, nil}
+  end
+
+  @doc """
+  Handle a message from the client.
+  """
+  def handle_message(connection_pid, message_type, data) do
+    GenServer.cast(connection_pid, {message_type, data})
+  end
+
+  # ---------------------------------------------------------------------------
+  # Server Implementation
+  # ---------------------------------------------------------------------------
+
+  @impl GenServer
+  def init(state) do
+    {:ok, _} = :timer.send_interval(@sync_ms, :sync)
+    {:ok, state}
+  end
 
   @impl GenServer
   def handle_info(:sync, connection) do
@@ -79,14 +103,9 @@ defmodule RakNet.Connection do
 
   @impl GenServer
   def handle_info(:ping, connection) do
-    # Do nothing for now.
-  end
+    connection.send.(make_ping_buffer(connection.base_time))
 
-  @doc """
-  Handle a message from the client.
-  """
-  def handle_message(connection_pid, message_type, data) do
-    GenServer.cast(connection_pid, {message_type, data})
+    {:noreply, connection}
   end
 
   defp enqueue(connection, reliability, buffer) when is_atom(reliability) and is_bitstring(buffer),
@@ -121,6 +140,11 @@ defmodule RakNet.Connection do
     %{ connection |
       packet_buffer: [],
     }
+  end
+
+  @impl GenServer
+  def handle_cast({:send, reliability, message}, connection) do
+    {:noreply, enqueue(connection, reliability, message)}
   end
 
   # Handles a :open_connection_request_1 message.
@@ -293,9 +317,9 @@ defmodule RakNet.Connection do
   def handle_cast({:connected_ping, data}, connection) do
     Logger.debug("Received connected ping")
 
-    <<_ping_time::size(64)>> = data
+    <<ping_time::size(64)>> = data
 
-    # TODO
+    connection.send.(make_pong_buffer(connection.base_time, ping_time))
 
     {:noreply, connection}
   end
@@ -326,7 +350,7 @@ defmodule RakNet.Connection do
   end
 
   @impl GenServer
-  def handle_cast({:data_packet_4, data}, connection) do
+  def handle_cast({_, data}, connection) do
     Logger.debug("Received client connect")
 
     <<_sequence::unsigned-size(24), data::binary>> = data
@@ -339,6 +363,19 @@ defmodule RakNet.Connection do
       end)
 
     {:noreply, connection}
+  end
+
+  defp make_ping_buffer(base_time) do
+    <<>>
+      <> Packet.encode_msg(:connected_ping)
+      <> Packet.encode_timestamp(RakNet.Server.timestamp(base_time))
+  end
+
+  defp make_pong_buffer(base_time, ping_time) do
+    <<>>
+      <> Packet.encode_msg(:connected_pong)
+      <> Packet.encode_timestamp(ping_time)
+      <> Packet.encode_timestamp(RakNet.Server.timestamp(base_time))
   end
 
 end

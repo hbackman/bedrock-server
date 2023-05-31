@@ -194,6 +194,9 @@ defmodule RakNet.Packet do
   def encode_bool(false), do: <<0>>
   def encode_bool(true),  do: <<1>>
 
+  def encode_byte(value),
+    do: <<value::size(1)>>
+
   def encode_uint24(value),
     do: <<value::big-size(24)>>
 

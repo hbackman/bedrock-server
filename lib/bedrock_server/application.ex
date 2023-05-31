@@ -14,7 +14,8 @@ defmodule BedrockServer.Application do
         client_module: BedrockServer.Client.State,
         client_data: %{},
       }},
-      {Registry, keys: :unique, name: RakNet.Connection},
+      #{BedrockServer.SessionServer, %{}},
+      {Registry, keys: :unique, name: BedrockServer.Client},
     ], opts)
   end
 end
