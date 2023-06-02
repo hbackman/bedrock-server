@@ -23,12 +23,28 @@ defmodule RakNet.Packet do
     end
   end
 
+  defmacro bool() do
+    quote do: size(1)
+  end
+
   defmacro id() do
     quote do: size(8)
   end
 
-  defmacro uint8 do
+  defmacro int8 do
     quote do: big-size(8)
+  end
+
+  defmacro int16 do
+    quote do: big-size(16)
+  end
+
+  defmacro int24 do
+    quote do: big-size(48)
+  end
+
+  defmacro int64 do
+    quote do: big-size(64)
   end
 
   # ------------------------------------------------------------
@@ -167,10 +183,10 @@ defmodule RakNet.Packet do
       len = bit_size(packet)
 
       msg <> encode_flag(0x60)  # RakNet Message flags
-          <> encode_uint16(len) # RakNet Payload length
-          <> encode_uint24(0)   # RakNet Reliable message ordering
-          <> encode_uint24(0)   # RakNet Message ordering index
-          <> encode_uint8(0)    # RakNet Message ordering channel
+          <> encode_int16(len) # RakNet Payload length
+          <> encode_int24(0)   # RakNet Reliable message ordering
+          <> encode_int24(0)   # RakNet Message ordering index
+          <> encode_int8(0)    # RakNet Message ordering channel
           <> packet
     end)
 
@@ -184,7 +200,7 @@ defmodule RakNet.Packet do
   Encodes a string.
   """
   def encode_string(value) when is_bitstring(value) do
-    strlen = encode_uint16(byte_size(value))
+    strlen = encode_int16(byte_size(value))
     <<strlen::binary, value::binary>>
   end
 
@@ -197,14 +213,14 @@ defmodule RakNet.Packet do
   def encode_byte(value),
     do: <<value::size(1)>>
 
-  def encode_uint24(value),
-    do: <<value::big-size(24)>>
+  def encode_int8(value),
+    do: <<value::int8>>
 
-  def encode_uint16(value),
-    do: <<value::big-size(16)>>
+  def encode_int16(value),
+    do: <<value::int16>>
 
-  def encode_uint8(value),
-    do: <<value::big-size(8)>>
+  def encode_int24(value),
+    do: <<value::int24>>
 
   @doc """
   Encodes an ip address.
@@ -212,19 +228,19 @@ defmodule RakNet.Packet do
   def encode_ip(4, address, port) do
     {a1, a2, a3, a4} = address
 
-    encode_uint8(4)     <>
+    encode_int8(4)     <>
     <<255-a1::size(8)>> <>
     <<255-a2::size(8)>> <>
     <<255-a3::size(8)>> <>
     <<255-a4::size(8)>> <>
-    encode_uint16(port)
+    encode_int16(port)
   end
 
   @doc """
   Encodes a sequence number. These are three bytes in size.
   """
   def encode_seq_number(num) do
-    encode_uint24(num)
+    encode_int24(num)
   end
 
   @doc """
@@ -238,7 +254,7 @@ defmodule RakNet.Packet do
   Encodes a packet flag.
   """
   def encode_flag(flag) when flag <= 255 do
-    encode_uint8(flag)
+    encode_int8(flag)
   end
 
   @doc """

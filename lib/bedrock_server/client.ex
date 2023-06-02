@@ -126,7 +126,7 @@ defmodule BedrockServer.Client do
       <> Packet.encode_float(0)
       |> Hexdump.inspect
 
-    #RakNet.Connection.send(client.connection_pid, :unreliable, message)
+    RakNet.Connection.send(client.connection_pid, :unreliable, message)
 
     IO.inspect "HELLO"
 

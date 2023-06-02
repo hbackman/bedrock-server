@@ -47,13 +47,13 @@ defmodule BedrockServer.Packet do
   Encode a short integer.
   """
   def encode_short(v),
-    do: RakNet.Packet.encode_uint16(v)
+    do: RakNet.Packet.encode_int16(v)
 
   @doc """
   Encode a byte sized integer.
   """
   def encode_byte(v),
-    do: RakNet.Packet.encode_uint8(v)
+    do: RakNet.Packet.encode_int8(v)
 
   @doc """
   Encode a single-precision 32-bit floating point number.

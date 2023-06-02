@@ -21,6 +21,7 @@ defmodule RakNet.Connection do
 
   alias RakNet.Message
   alias RakNet.Packet
+  alias RakNet.Server
   alias RakNet.Reliability
 
   require Logger
@@ -64,8 +65,9 @@ defmodule RakNet.Connection do
   @doc """
   Terminate the connection.
   """
-  def stop(connection_pid),
-    do: GenServer.stop(connection_pid, :shutdown)
+  def stop(connection_pid) do
+    GenServer.stop(connection_pid, :shutdown)
+  end
 
   @doc """
   Send a message to the client.
@@ -82,6 +84,14 @@ defmodule RakNet.Connection do
   """
   def handle_message(connection_pid, message_type, data) do
     GenServer.cast(connection_pid, {message_type, data})
+  end
+
+  # Log a message with the client prefixed.
+  defp log(connection, level, message) do
+    port = connection.port
+    host = connection.host |> Server.ip_to_string()
+
+    Logger.log(level, "[#{host}:#{port}] " <> message)
   end
 
   # ---------------------------------------------------------------------------
@@ -156,7 +166,7 @@ defmodule RakNet.Connection do
   # | Protocol Version | i8    | Currently 11 |
   # | MTU              | null  | Null padding |
   def handle_cast({:open_connection_request_1, _data}, connection) do
-    Logger.debug("Received open connection request 1")
+    log(connection, :debug, "Received open connection request 1")
 
     # | Field Name | Type  | Notes                    |
     # |------------|-------|--------------------------|
@@ -171,7 +181,7 @@ defmodule RakNet.Connection do
       <> Message.offline()
       <> connection.server_identifier
       <> Packet.encode_bool(false)
-      <> Packet.encode_uint16(1400)
+      <> Packet.encode_int16(1400)
       |> Hexdump.inspect
 
     Logger.debug("Sending open connection reply 1")
@@ -190,7 +200,7 @@ defmodule RakNet.Connection do
   # | Client ID   | i64   |       |
   @impl GenServer
   def handle_cast({:open_connection_request_2, _data}, connection) do
-    Logger.debug("Received open connection request 2")
+    log(connection, :debug, "Received open connection request 2")
 
     %{
       host: host,
@@ -211,7 +221,7 @@ defmodule RakNet.Connection do
       <> Message.offline()
       <> connection.server_identifier
       <> Packet.encode_ip(4, host, port)
-      <> Packet.encode_uint16(1400)
+      <> Packet.encode_int16(1400)
       <> Packet.encode_bool(false)
       |> Hexdump.inspect
 
@@ -231,7 +241,7 @@ defmodule RakNet.Connection do
   # | Password   | ---- | Maybe related to ^     |
   @impl GenServer
   def handle_cast({:client_connect, data}, connection) do
-    Logger.debug("Received client connect")
+    log(connection, :debug, "Received client connect")
 
     <<_client_id::size(64), time_sent::size(64), @use_security::size(8), _password::binary>> = data
 
@@ -254,7 +264,7 @@ defmodule RakNet.Connection do
     message = <<>>
       <> Packet.encode_msg(:server_handshake)
       <> Packet.encode_ip(4, host, port)
-      <> Packet.encode_uint8(0)
+      <> Packet.encode_int8(0)
       <> :erlang.list_to_binary(List.duplicate(
         Packet.encode_ip(4, {255, 255, 255, 255}, 0), 10
       ))
@@ -276,7 +286,7 @@ defmodule RakNet.Connection do
   # | Internal Addr | addr | Unknown what this does. |
   @impl GenServer
   def handle_cast({:client_handshake, _data}, connection) do
-    Logger.debug("Received client handshake")
+    log(connection, :debug, "Received client handshake")
 
     # We do not need to respond to this. However, we should set the connection to
     # start pinging the client.
@@ -296,7 +306,7 @@ defmodule RakNet.Connection do
 
   @impl GenServer
   def handle_cast({:ack, _data}, connection) do
-    Logger.debug("Received ack")
+    log(connection, :debug, "Received ack")
 
     # TODO: Implementation
 
@@ -305,7 +315,7 @@ defmodule RakNet.Connection do
 
   @impl GenServer
   def handle_cast({:nack, _data}, connection) do
-    Logger.debug("Received nack")
+    log(connection, :debug, "Received nack")
 
     # TODO: Implementation
 
@@ -315,7 +325,7 @@ defmodule RakNet.Connection do
   # Handles a :connected_ping by the client.
   @impl GenServer
   def handle_cast({:connected_ping, data}, connection) do
-    Logger.debug("Received connected ping")
+    log(connection, :debug, "Received connected ping")
 
     <<ping_time::size(64)>> = data
 
@@ -331,7 +341,7 @@ defmodule RakNet.Connection do
   # | Packet ID  | i8   | 0x13  |
   @impl GenServer
   def handle_cast({:client_disconnect, _data}, connection) do
-    Logger.debug("Received client disconnect")
+    log(connection, :debug, "Received client disconnect")
 
     Process.exit(self(), :normal)
 
@@ -340,7 +350,7 @@ defmodule RakNet.Connection do
 
   @impl GenServer
   def handle_cast({:game_packet, data}, connection) do
-    Logger.debug("Received game packet")
+    log(connection, :debug, "Received game packet")
 
     # Forward the packet to the RakNet.Client implementation. This will now handle
     # all further game packets.
@@ -351,7 +361,7 @@ defmodule RakNet.Connection do
 
   @impl GenServer
   def handle_cast({_, data}, connection) do
-    Logger.debug("Received client connect")
+    log(connection, :debug, "Received client connect")
 
     <<_sequence::unsigned-size(24), data::binary>> = data
 

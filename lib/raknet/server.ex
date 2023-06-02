@@ -17,6 +17,7 @@ defmodule RakNet.Server do
   def init(opts) do
     %{
       port: port,
+      host: host,
       guid: _guid,
     } = opts
 
@@ -29,8 +30,10 @@ defmodule RakNet.Server do
     #   - binary: request that data be returned as `String`/
     #   - active: gen_udp will handle data reception and send us a message `{:udp,
     #     socket, address, port, data}` when new data arrives.
+    #   - ip: this binds the server to the given ip.
     {:ok, socket} = :gen_udp.open(port, [
       :binary,
+      {:ip, host}
     ])
 
     {:ok, opts |> Map.merge(%{
@@ -38,8 +41,18 @@ defmodule RakNet.Server do
     })}
   end
 
+  @doc "Retrieve the current server config."
+  def config(pid) do
+    GenServer.call(pid, :config)
+  end
+
   @doc "The current unix timestamp, in milliseconds."
   def timestamp(offset \\ 0), do: :os.system_time(:millisecond) - offset
+
+  @doc "Convert ip address to a string."
+  def ip_to_string({ip0, ip1, ip2, ip3}) do
+    "#{ip0}.#{ip1}.#{ip2}.#{ip3}"
+  end
 
   # Send a UDP packet.
   defp respond(socket, {host, port}, data) do
@@ -120,11 +133,13 @@ defmodule RakNet.Server do
         base_time: timestamp(),
       })
 
-    # Prevent the server from crashing if the connection fails. If
-    # this happens, we can just reconnect.
+    # Prevent the server from crashing if the connection fails. If this happens, we
+    # can just reconnect.
     Process.unlink(client)
 
     Registry.register(Connection, {host, port}, client)
+
+    Logger.debug("Created session for #{ip_to_string(host)}:#{port}")
 
     client
   end
@@ -162,5 +177,10 @@ defmodule RakNet.Server do
 
   defp handle_message(_socket, _config, _client, _type, _data) do
     {:ok}
+  end
+
+  @impl GenServer
+  def handle_call(:config, _from, config) do
+    {:reply, config, config}
   end
 end
