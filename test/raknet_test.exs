@@ -12,6 +12,9 @@ defmodule RakNetTest do
   @server_host {127, 0, 0, 1}
   @server_port 19132
 
+  @doc """
+  Macro for asserting that a packet sent by the server match the given pattern.
+  """
   defmacro assert_packet(spec) do
     quote do
       assert_receive {
@@ -24,8 +27,18 @@ defmodule RakNetTest do
     end
   end
 
+  @doc """
+  Bitstring data type for the magic RakNet offline bytes.
+  """
   defmacro magic do
     quote do: binary-size(16)
+  end
+
+  @doc """
+  Bitstring data type for buffers.
+  """
+  defmacro buffer(string) do
+    quote do: binary-size(byte_size(unquote(string)))
   end
 
   defp new_connection() do
@@ -102,7 +115,8 @@ defmodule RakNetTest do
       _::int64,
       _::int64,
       _::magic,
-    >> <> ^advertisement
+      ^advertisement::buffer(advertisement),
+    >>
   end
 
   # Attempt to send the server an unconnected ping. The server should only
@@ -131,16 +145,16 @@ defmodule RakNetTest do
 
     setup_connection_request_1(server, sender)
 
-    sec_size = byte_size(Packet.encode_bool(false))
-    mtu_size = byte_size(Packet.encode_int16(1400))
+    sec = Packet.encode_bool(false)
+    mtu = Packet.encode_int16(1400)
 
     assert_packet <<
-      _::id,
-      _::magic,
-      _::int64,
-      _::binary-size(mtu_size),
-      _::binary-size(sec_size),
-    >>
+     _::id,
+     _::magic,
+     _::int64,
+     ^sec::buffer(sec),
+     ^mtu::buffer(mtu),
+   >>
   end
 
   defp setup_connection_request_2(server, sender) do
@@ -165,13 +179,16 @@ defmodule RakNetTest do
 
     setup_connection_request_2(server, sender)
 
+    mtu = Packet.encode_int16(1400)
+    enc = Packet.encode_bool(false)
+
     assert_packet <<
       _::id,
       _::magic,
       _::int64,
       _::ip(4),
-      1400::int16,
-      0
+      ^mtu::buffer(mtu),
+      ^enc::buffer(enc),
     >>
   end
 
