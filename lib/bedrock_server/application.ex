@@ -21,7 +21,7 @@ defmodule BedrockServer.Application do
       {RakNet.Server, %{
         port: 19132,
         host: {127, 0, 0, 1},
-        guid: <<0x8d, 0xe7, 0xee, 0x79, 0x41, 0xe6, 0xf2, 0xce>>,
+        guid: 13547959620129336354,
         client_module: BedrockServer.Client.State,
         client_data: %{},
       }},

@@ -24,6 +24,8 @@ defmodule RakNet.Connection do
   alias RakNet.Server
   alias RakNet.Reliability
 
+  import Packet
+
   require Logger
   require Packet
 
@@ -40,11 +42,15 @@ defmodule RakNet.Connection do
       server_identifier: nil,
       packet_buffer: [],
       packet_sequence: 0,
+      message_index: 0,
       client_module: nil,
       client_data: %{},
       client: nil,
       # The :os.system_time(:millisecond) time at which we were created.
       base_time: 0,
+      ordered_write_index: 0,
+      # Sequencing for whole messages.
+      send_sequence: 0,
     ]
   end
 
@@ -125,11 +131,14 @@ defmodule RakNet.Connection do
     num_buffers = length(buffers)
     new_buffers = buffers
       |> Enum.zip(0..(num_buffers - 1))
-      |> Enum.map(fn {buffer, _idx} ->
+      |> Enum.map(fn {buffer, idx} ->
+        IO.inspect ["SEQ", connection.packet_sequence + idx]
         %Reliability.Packet{
           reliability: reliability,
           message_buffer: buffer,
           message_index: if(Reliability.is_reliable?(reliability), do: connection.message_index, else: nil),
+          order_index: connection.ordered_write_index,
+          sequencing_index: connection.packet_sequence + idx,
         }
       end)
 
@@ -142,14 +151,20 @@ defmodule RakNet.Connection do
   defp sync_enqueued_packets(connection) do
     %{ packet_buffer: buffer } = connection
 
-    Enum.each(buffer, fn packet ->
-      # TODO: Encode packet properly
-      connection.send.(packet.message_buffer)
-    end)
+    if Enum.empty?(buffer) do
+      connection
+    else
+      <<>>
+        <> Packet.encode_msg(:data_packet_4)
+        <> Packet.encode(buffer, connection.send_sequence)
+        |> Hexdump.inspect
+        |> connection.send.()
 
-    %{ connection |
-      packet_buffer: [],
-    }
+      %{ connection |
+        packet_buffer: [],
+        send_sequence: connection.send_sequence + 1,
+      }
+    end
   end
 
   @impl GenServer
@@ -179,14 +194,16 @@ defmodule RakNet.Connection do
     message = <<>>
       <> Packet.encode_msg(:open_connection_reply_1)
       <> Message.offline()
-      <> connection.server_identifier
+      <> Packet.encode_int64(connection.server_identifier)
       <> Packet.encode_bool(false)
       <> Packet.encode_int16(1400)
-      |> Hexdump.inspect
+      #|> Hexdump.inspect
 
     Logger.debug("Sending open connection reply 1")
 
-    {:noreply, enqueue(connection, :unreliable, message)}
+    connection.send.(message)
+
+    {:noreply, connection}
   end
 
   # Handles a :open_connection_request_2 message.
@@ -219,15 +236,17 @@ defmodule RakNet.Connection do
     message = <<>>
       <> Message.binary(:open_connection_reply_2, true)
       <> Message.offline()
-      <> connection.server_identifier
+      <> Packet.encode_int64(connection.server_identifier)
       <> Packet.encode_ip(4, host, port)
       <> Packet.encode_int16(1400)
       <> Packet.encode_bool(false)
-      |> Hexdump.inspect
+      #|> Hexdump.inspect
 
     Logger.debug("Sending open connection reply 2")
 
-    {:noreply, enqueue(connection, :unreliable, message)}
+    connection.send.(message)
+
+    {:noreply, connection}
   end
 
   # Handles a :client_connect message.
@@ -243,7 +262,8 @@ defmodule RakNet.Connection do
   def handle_cast({:client_connect, data}, connection) do
     log(connection, :debug, "Received client connect")
 
-    <<_client_id::size(64), time_sent::size(64), @use_security::size(8), _password::binary>> = data
+    #<<_client_id::size(64), time_sent::size(64), @use_security::size(8), _password::binary>> = data
+    <<_client_id::int64, time_sent::int64, @use_security::int8>> = data
 
     send_pong = RakNet.Server.timestamp()
 
@@ -264,18 +284,19 @@ defmodule RakNet.Connection do
     message = <<>>
       <> Packet.encode_msg(:server_handshake)
       <> Packet.encode_ip(4, host, port)
-      <> Packet.encode_int8(0)
+      <> Packet.encode_int16(0)
       <> :erlang.list_to_binary(List.duplicate(
-        Packet.encode_ip(4, {255, 255, 255, 255}, 0), 10
+        Packet.encode_ip(4, {255, 255, 255, 255}, 19132), 10
       ))
       <> Packet.encode_timestamp(time_sent)
       <> Packet.encode_timestamp(send_pong)
-      |> Packet.encode_encapsulated
-      |> Hexdump.inspect
+      #|> Hexdump.inspect
 
     Logger.debug("Sent server handshake")
 
-    {:noreply, enqueue(connection, :unreliable, message)}
+    IO.inspect [:client_connect, connection.packet_sequence]
+
+    {:noreply, enqueue(connection, :reliable_ordered, message)}
   end
 
   # Handles a :client_handshake message.
@@ -285,11 +306,26 @@ defmodule RakNet.Connection do
   # | Server Addr   | addr |                         |
   # | Internal Addr | addr | Unknown what this does. |
   @impl GenServer
-  def handle_cast({:client_handshake, _data}, connection) do
+  def handle_cast({:client_handshake, data}, connection) do
     log(connection, :debug, "Received client handshake")
 
-    # We do not need to respond to this. However, we should set the connection to
-    # start pinging the client.
+    addresses_length = bit_size(data) - 2 * 64
+
+    <<
+      _::bitstring-size(addresses_length),
+      ping_time::timestamp,
+      _pong_time::timestamp,
+    >> = data
+
+    # We should reply with a connected ping, then configure the server to ping the
+    # client each 5 seconds.
+
+    IO.inspect [:client_handshake, connection.packet_sequence]
+
+    connection = enqueue(connection, :unreliable, [
+      make_ping_buffer(connection.base_time),
+      make_pong_buffer(ping_time, connection.base_time),
+    ])
 
     {:ok, _} = :timer.send_interval(@ping_ms, :ping)
 
@@ -329,8 +365,16 @@ defmodule RakNet.Connection do
 
     <<ping_time::size(64)>> = data
 
-    connection.send.(make_pong_buffer(connection.base_time, ping_time))
+    message = make_pong_buffer(connection.base_time, ping_time)
 
+    IO.inspect [:connected_ping, connection.packet_sequence]
+
+    {:noreply, enqueue(connection, :unreliable, message)}
+  end
+
+  # Handles a :connected_pong by the client.
+  @impl GenServer
+  def handle_cast({:connected_pong, _}, connection) do
     {:noreply, connection}
   end
 
@@ -360,8 +404,8 @@ defmodule RakNet.Connection do
   end
 
   @impl GenServer
-  def handle_cast({_, data}, connection) do
-    log(connection, :debug, "Received client connect")
+  def handle_cast({type, data}, connection) do
+    log(connection, :debug, "Received #{type}")
 
     <<_sequence::unsigned-size(24), data::binary>> = data
 

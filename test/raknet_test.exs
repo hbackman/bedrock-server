@@ -1,6 +1,6 @@
 defmodule RakNetTest do
 
-  use ExUnit.Case, async: true
+  use ExUnit.Case
 
   alias RakNet.Connection
   alias RakNet.Packet
@@ -41,23 +41,23 @@ defmodule RakNetTest do
     quote do: binary-size(byte_size(unquote(string)))
   end
 
-  defp new_connection() do
-    here = self()
-    %Connection.State{
-      host: {127, 0, 0, 1},
-      port: 12345,
-      send: fn data ->
-        send(here, {:sent, data})
-      end,
-      server_identifier: <<0x8d, 0xe7, 0xee, 0x79, 0x41, 0xe6, 0xf2, 0xce>>,
-    }
-  end
+  #defp new_connection() do
+  #  here = self()
+  #  %Connection.State{
+  #    host: {127, 0, 0, 1},
+  #    port: 12345,
+  #    send: fn data ->
+  #      send(here, {:sent, data})
+  #    end,
+  #    server_identifier: 13547959620129336354,
+  #  }
+  #end
 
   defp make_server() do
     Server.start_link(%{
       port: @server_port,
       host: @server_host,
-      guid: <<0x8d, 0xe7, 0xee, 0x79, 0x41, 0xe6, 0xf2, 0xce>>,
+      guid: 13547959620129336354,
       client_module: BedrockServer.Client.State,
       client_data: %{},
     })
@@ -90,7 +90,7 @@ defmodule RakNetTest do
 
   # Attempt to send the server an unconnected ping.
   #
-  test ":unconnected_ping" do
+  test :unconnected_ping do
     msg = <<>>
       <> Message.binary(:unconnected_ping, true)
       <> encode_timestamp(RakNet.Server.timestamp())
@@ -111,7 +111,7 @@ defmodule RakNetTest do
       |> RakNet.Advertisement.to_buffer()
 
     assert_packet <<
-      _::id,
+      0x1c::id,
       _::int64,
       _::int64,
       _::magic,
@@ -122,11 +122,11 @@ defmodule RakNetTest do
   # Attempt to send the server an unconnected ping. The server should only
   # reply to this if the server has active connections.
   #
-  test ":unconnected_ping_2" do
+  test :unconnected_ping_2 do
     # todo
   end
 
-  defp setup_connection_request_1(_server, sender) do
+  defp send_connection_request_1({server, sender}) do
     msg = <<>>
       <> Message.binary(:open_connection_request_1, true)
       <> Message.offline()
@@ -134,22 +134,24 @@ defmodule RakNetTest do
       <> <<0x00, 0x00>>
 
     sender.(msg)
+
+    {server, sender}
   end
 
   # Attempt to send the server an open connection request 1. This test will
   # not cover MTU detection and will assume an MTU of 1400.
   #
-  test ":open_connection_request_1" do
+  test :open_connection_request_1 do
     server = make_server!()
     sender = make_sender!(server)
 
-    setup_connection_request_1(server, sender)
+    send_connection_request_1({server, sender})
 
     sec = Packet.encode_bool(false)
     mtu = Packet.encode_int16(1400)
 
     assert_packet <<
-     _::id,
+     0x06::id,
      _::magic,
      _::int64,
      ^sec::buffer(sec),
@@ -157,9 +159,7 @@ defmodule RakNetTest do
    >>
   end
 
-  defp setup_connection_request_2(server, sender) do
-    setup_connection_request_1(server, sender)
-
+  defp send_connection_request_2({server, sender}) do
     cnf = Server.config(server)
     msg = <<>>
       <> Message.binary(:open_connection_request_2, true)
@@ -168,27 +168,66 @@ defmodule RakNetTest do
       <> Packet.encode_int8(1400)
 
     sender.(msg)
+
+    {server, sender}
   end
 
   # Attempt to send the server an open connection request 2. This test will
   # not cover MTU detection and will assume an MTU of 1400.
   #
-  test ":open_connection_request_2" do
+  test :open_connection_request_2 do
     server = make_server!()
     sender = make_sender!(server)
 
-    setup_connection_request_2(server, sender)
+    {server, sender}
+      |> send_connection_request_1()
+      |> send_connection_request_2()
 
     mtu = Packet.encode_int16(1400)
     enc = Packet.encode_bool(false)
 
     assert_packet <<
-      _::id,
+      0x08::id,
       _::magic,
       _::int64,
       _::ip(4),
       ^mtu::buffer(mtu),
       ^enc::buffer(enc),
+    >>
+  end
+
+  defp send_client_connect({server, sender}) do
+    msg = <<>>
+      <> Message.binary(:client_connect, true)
+      <> Packet.encode_int64(123)
+      <> Packet.encode_timestamp(Server.timestamp())
+      <> Packet.encode_int8(0)
+
+    sender.(msg)
+
+    {server, sender}
+  end
+
+  test :connection_request do
+    server = make_server!()
+    sender = make_sender!(server)
+
+    {server, sender}
+      |> send_connection_request_1()
+      |> send_connection_request_2()
+      |> send_client_connect()
+
+    ips = Packet.encode_ip(4, {255, 255, 255, 255}, 0)
+      |> List.duplicate(10)
+      |> :erlang.list_to_binary
+
+    assert_packet <<
+      0x10::id,
+      _::ip(4),
+      _::int16,
+      ^ips::buffer(ips),
+      _::int64,
+      _::int64,
     >>
   end
 

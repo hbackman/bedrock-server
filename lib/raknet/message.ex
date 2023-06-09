@@ -18,7 +18,6 @@ defmodule RakNet.Message do
 
     # Connection request.
     :client_connect => 0x09,
-
     # Connection was successful.
     :server_handshake => 0x10,
 

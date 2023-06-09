@@ -33,20 +33,20 @@ defmodule RakNet.Reliability.Packet do
   defstruct [
     :reliability,
 
-    :has_split,
+    has_split: 0,
 
-    :order_index,
-    :order_channel,
+    order_index: nil,
+    order_channel: 0,
 
-    :split_count,
-    :split_id,
-    :split_index,
+    split_count: nil,
+    split_id: nil,
+    split_index: nil,
 
-    :sequencing_index,
+    sequencing_index: nil,
 
-    :message_index,
-    :message_length,
-    :message_id,
-    :message_buffer
+    message_index: nil,
+    message_length: -1,
+    message_id: nil,
+    message_buffer: nil,
   ]
 end

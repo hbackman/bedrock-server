@@ -8,7 +8,7 @@ defmodule RakNet.Advertisement do
     gamemode: "Survival",
     gamemodeId: 1,
     protocol: "568",
-    version: "1.19.63",
+    version: "1.19.70",
     playerCount: 1,
     playerLimit: 10,
     serverId: -1,

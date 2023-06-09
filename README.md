@@ -62,10 +62,14 @@ All following packets will be Game Packets.
 
 ## Types
 
-| Name  | Desc                                                                      |
-|-------|---------------------------------------------------------------------------|
-| in64  |                                                                           |
-| MAGIC | 0x00ffff00fefefefefdfdfdfd12345678 This is hardcoded in the RakNet source |
+| Name  | Size | Desc                                                                      |
+|-------|------|---------------------------------------------------------------------------|
+| addr  | 7    |                                                                           |
+| int8  | 1    | Signed  8-bit integer                                                     |
+| int16 | 2    | Signed 16-bit integer                                                     |
+| int24 | 3    | Signed 24-bit integer                                                     |
+| int64 | 4    | Signed 64-bit integer                                                     |
+| MAGIC | 16   | 0x00ffff00fefefefefdfdfdfd12345678 This is hardcoded in the RakNet source |
 
 ## Packets
 
@@ -174,3 +178,32 @@ This packet should be replied to with Open Connection Reply 2.
 | MTU            | i16     | See Open Connection Request 1 |
 | Use Encryption | boolean | Not sure what this does       |
 
+### Connection Request `0x09`
+
+This packet should be replied to with Connection Request Accepted.
+
+| Field | Type |
+|-------|------|
+| GUID  | i64  |
+| Time  | i64  |
+
+### Connection Request Accepted `0x10`
+
+| Field          | Type  | Notes                                                    |
+|----------------|-------|----------------------------------------------------------|
+| Client address | ip    |                                                          |
+| System index   | int8  | Unknown what this does.                                  |
+| Internal IDs   | ip*10 | Unknown what these do. Empty ipts for all of them works. |
+| Request time   | int64 |                                                          |
+| Time           | int64 |                                                          |
+
+### New Incoming Connection `0x13`
+
+| Field            | Type  | Notes                                                    |
+|------------------|-------|----------------------------------------------------------|
+| Server address   | ip    |                                                          |
+| Internal address | int8  | Unknown what this does.                                  |
+
+### Disconnect `0x15`
+
+This packet is empty.

@@ -3,6 +3,7 @@ defmodule RakNet.Server do
 
   require Logger
 
+  alias RakNet.Packet
   alias RakNet.Message
   alias RakNet.Connection
   alias RakNet.Advertisement
@@ -160,7 +161,7 @@ defmodule RakNet.Server do
     message_head = <<>>
       <> Message.binary(:unconnected_pong, true)
       <> <<ping_time::size(64)>>
-      <> Message.unique_id()
+      <> Packet.encode_int64(config.guid)
       <> Message.offline()
 
     message_body = %{
@@ -175,7 +176,7 @@ defmodule RakNet.Server do
     {:ok}
   end
 
-  defp handle_message(_socket, _config, _client, _type, _data) do
+  defp handle_message(_socket, _config, _client, type, data) do
     {:ok}
   end
 

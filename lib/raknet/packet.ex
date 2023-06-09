@@ -40,7 +40,7 @@ defmodule RakNet.Packet do
   end
 
   defmacro int24 do
-    quote do: big-size(48)
+    quote do: big-size(24)
   end
 
   defmacro int64 do
@@ -171,30 +171,80 @@ defmodule RakNet.Packet do
   # Encode
   # ------------------------------------------------------------
 
+  def encode(packets, seq) when is_list(packets) do
+    IO.inspect ["PACKET", packets]
+    :erlang.iolist_to_binary([
+      encode_seq_number(seq),
+      Enum.map(packets, fn packet ->
+        encode_encapsulated(packet)
+      end)
+    ])
+  end
+
   @doc """
   Encode encapsulated messages.
   """
-  def encode_encapsulated(packets) when is_list(packets) do
-    header = <<>>
-      <> encode_msg(:data_packet_4)
-      <> encode_seq_number(0)
+  def encode_encapsulated(packet = %Reliability.Packet{}) do
 
-    message = Enum.reduce(packets, <<>>, fn packet, msg ->
-      len = bit_size(packet)
+    is_reliable = Reliability.is_reliable?(packet.reliability)
+    is_sequenced = Reliability.is_sequenced?(packet.reliability)
 
-      msg <> encode_flag(0x60)  # RakNet Message flags
-          <> encode_int16(len) # RakNet Payload length
-          <> encode_int24(0)   # RakNet Reliable message ordering
-          <> encode_int24(0)   # RakNet Message ordering index
-          <> encode_int8(0)    # RakNet Message ordering channel
-          <> packet
-    end)
+    index = if is_reliable,
+      do: packet.message_index,
+    else: packet.sequencing_index
 
-    header <> message
+    header = <<
+      Reliability.binary(packet.reliability)::unsigned-size(3),
+      packet.has_split::unsigned-size(5),
+    >>
+
+    message = <<
+      trunc(byte_size(packet.message_buffer) * 8)::size(16)
+    >><> if is_reliable or is_sequenced do
+        <<index::little-size(24)>> <>
+          if is_sequenced do
+            <<
+              packet.order_index::little-size(24),
+              packet.order_channel::size(8)
+            >>
+          else
+            <<>>
+          end
+      else
+        <<>>
+      end
+      <> if packet.has_split > 0 do
+        <<
+          packet.split_count::size(32),
+          packet.split_id::size(16),
+          packet.split_index::size(32),
+        >>
+      else
+        <<>>
+      end
+
+    header <> message <> packet.message_buffer
+      |> Hexdump.inspect
   end
 
-  def encode_encapsulated(packets) when is_bitstring(packets),
-    do: encode_encapsulated([packets])
+# def encode_encapsulated(packets) when is_list(packets) do
+#   header = <<>>
+#     <> encode_msg(:data_packet_4)
+#     <> encode_seq_number(0)
+#
+#   message = Enum.reduce(packets, <<>>, fn packet, msg ->
+#     len = bit_size(packet)
+#
+#     msg <> encode_flag(0x60)  # RakNet Message flags
+#         <> encode_int16(len) # RakNet Payload length
+#         <> encode_int24(0)   # RakNet Reliable message ordering
+#         <> encode_int24(0)   # RakNet Message ordering index
+#         <> encode_int8(0)    # RakNet Message ordering channel
+#         <> packet
+#   end)
+#
+#   header <> message
+# end
 
   @doc """
   Encodes a string.
@@ -213,14 +263,10 @@ defmodule RakNet.Packet do
   def encode_byte(value),
     do: <<value::size(1)>>
 
-  def encode_int8(value),
-    do: <<value::int8>>
-
-  def encode_int16(value),
-    do: <<value::int16>>
-
-  def encode_int24(value),
-    do: <<value::int24>>
+  def encode_int8(value),  do: <<value::int8>>
+  def encode_int16(value), do: <<value::int16>>
+  def encode_int24(value), do: <<value::int24>>
+  def encode_int64(value), do: <<value::int64>>
 
   @doc """
   Encodes an ip address.
@@ -240,7 +286,14 @@ defmodule RakNet.Packet do
   Encodes a sequence number. These are three bytes in size.
   """
   def encode_seq_number(num) do
-    encode_int24(num)
+    <<num::little-size(24)>>
+  end
+
+  @doc """
+  Encodes a reliability flag.
+  """
+  def encode_reliability(num) do
+    <<Reliability.binary(num)::unsigned-size(3)>>
   end
 
   @doc """
@@ -248,13 +301,6 @@ defmodule RakNet.Packet do
   """
   def encode_msg(id) do
     <<Message.binary(id)>>
-  end
-
-  @doc """
-  Encodes a packet flag.
-  """
-  def encode_flag(flag) when flag <= 255 do
-    encode_int8(flag)
   end
 
   @doc """
