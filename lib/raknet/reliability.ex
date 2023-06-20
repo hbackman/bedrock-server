@@ -1,6 +1,6 @@
 defmodule RakNet.Reliability do
 
-  @reliability_lookup %{
+  @reliability_map %{
     :unreliable => 0,
     :unreliable_sequenced => 1,
     :reliable => 2,
@@ -14,8 +14,14 @@ defmodule RakNet.Reliability do
     :reliable_ordered_ack_receipt => 7
   }
 
+  @reliability_map_reverse Map.new(@reliability_map, fn {name, val} -> {val, name} end)
+
+  def name(value) when is_integer(value) do
+    Map.get(@reliability_map_reverse, value, :error)
+  end
+
   def binary(value) when is_atom(value) do
-    Map.fetch!(@reliability_lookup, value)
+    Map.fetch!(@reliability_map, value)
   end
 
   def is_reliable?(value) when is_integer(value), do: value in [2, 3, 4, 6, 7]

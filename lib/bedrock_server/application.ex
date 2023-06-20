@@ -19,9 +19,10 @@ defmodule BedrockServer.Application do
 
     Supervisor.start_link([
       {RakNet.Server, %{
-        port: 19132,
-        host: {127, 0, 0, 1},
         guid: 13547959620129336354,
+        host: {127, 0, 0, 1},
+        port: 19132,
+        portv6: 19133,
         client_module: BedrockServer.Client.State,
         client_data: %{},
       }},

@@ -8,6 +8,14 @@ defmodule BedrockServer.Packet do
     :network_setting_request => 0xc1,
   }
 
+  defstruct [
+    #:sender_sub_id,
+    #:recipient_sub_id,
+
+    packet_id: nil,
+    packet_buf: nil,
+  ]
+
   @doc """
   Returns the packet id atom from the given binary value. Defaults to :error.
   """
@@ -66,5 +74,23 @@ defmodule BedrockServer.Packet do
   """
   def encode_double(v),
     do: <<v::float-64>>
+
+  def decode_packet(buffer) do
+    <<
+      packet_id::size(8),
+      _pid::size(8),
+      _sid::size(8),
+      _rid::size(8),
+      packet_buf::binary
+    >> = buffer
+
+    case to_atom(packet_id) do
+      :error -> raise "Unknown packet id"
+      packet_id -> %__MODULE__{
+        packet_id: packet_id,
+        packet_buf: packet_buf,
+      }
+    end
+  end
 
 end

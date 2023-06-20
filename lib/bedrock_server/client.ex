@@ -35,8 +35,6 @@ defmodule BedrockServer.Client do
   alias BedrockServer.Packet
   alias BedrockServer.Client.State
 
-  import RakNet.Packet
-
   @doc """
   Starts the client without linking.
   """
@@ -50,19 +48,16 @@ defmodule BedrockServer.Client do
   @doc """
   Handle a game packet.
   """
-  def recieve(session_id, _packet_type, packet_buffer) do
+  def recieve(session_id, _packet_type, buffer) do
     case lookup(session_id) do
       nil -> nil
       pid ->
         # Bedrock packets are batched, so decode the batch, then handle them each as
         # separate packets.
-        Enum.each(decode_batch(packet_buffer), fn packet ->
-          <<
-            packet_id::id,
-            packet_buf::binary
-          >> = packet
+        Enum.each(decode_batch(buffer), fn packet ->
+          packet = Packet.decode_packet(packet)
 
-          GenServer.cast(pid, {Packet.to_atom(packet_id), packet_buf})
+          GenServer.cast(pid, packet)
         end)
     end
   end
@@ -97,18 +92,12 @@ defmodule BedrockServer.Client do
     {:ok, opts}
   end
 
-  # Handles a :network_settings_request packet.
-  #
-  # This is the first packet sent in the game session. It contains the client's
-  # protocol version. The server is expected to respond to this with a network
-  # settings packet.
-  #
-  # | Field Name | Type | Notes               |
-  # |------------|------|---------------------|
-  # | Protocol   | _    | Not yet implemented |
-  #
   @impl GenServer
-  def handle_cast({:network_setting_request, _packet_buffer}, client) do
+  def handle_cast(%Packet{
+    packet_id: :network_setting_request,
+    packet_buf: _packet_buf
+  }, client) do
+
     # | Field Name                | Type  |
     # |---------------------------|-------|
     # | Compression Threshold     | short |
@@ -124,16 +113,22 @@ defmodule BedrockServer.Client do
       <> Packet.encode_bool(false) # Disable throttling
       <> Packet.encode_byte(0)
       <> Packet.encode_float(0)
-      #|> Hexdump.inspect
+      |> Hexdump.inspect
 
-    #RakNet.Connection.send(client.connection_pid, :unreliable, message)
+    message = <<0xfe, 0x0c>> <> message
 
-    IO.inspect "HELLO"
+    RakNet.Connection.send(client.connection_pid, :reliable_ordered, message)
 
     {:noreply, %{client |
       compression_enabled: true,
       compression_algorithm: :zlib,
     }}
+  end
+
+  def handle_cast({type, buf}, client) do
+    IO.inspect type
+    Hexdump.inspect buf
+    {:noreply, client}
   end
 
   defp decode_batch(buf, packets \\ [])

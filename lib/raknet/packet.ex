@@ -121,7 +121,7 @@ defmodule RakNet.Packet do
     # that a custom packet can implement the lookup.
 
     {%Reliability.Packet{
-      reliability: '',
+      reliability: Reliability.name(reliability),
 
       has_split: has_split,
 
@@ -172,7 +172,6 @@ defmodule RakNet.Packet do
   # ------------------------------------------------------------
 
   def encode(packets, seq) when is_list(packets) do
-    IO.inspect ["PACKET", packets]
     :erlang.iolist_to_binary([
       encode_seq_number(seq),
       Enum.map(packets, fn packet ->
@@ -185,7 +184,6 @@ defmodule RakNet.Packet do
   Encode encapsulated messages.
   """
   def encode_encapsulated(packet = %Reliability.Packet{}) do
-
     is_reliable = Reliability.is_reliable?(packet.reliability)
     is_sequenced = Reliability.is_sequenced?(packet.reliability)
 
@@ -224,27 +222,8 @@ defmodule RakNet.Packet do
       end
 
     header <> message <> packet.message_buffer
-      |> Hexdump.inspect
+      # |> Hexdump.inspect
   end
-
-# def encode_encapsulated(packets) when is_list(packets) do
-#   header = <<>>
-#     <> encode_msg(:data_packet_4)
-#     <> encode_seq_number(0)
-#
-#   message = Enum.reduce(packets, <<>>, fn packet, msg ->
-#     len = bit_size(packet)
-#
-#     msg <> encode_flag(0x60)  # RakNet Message flags
-#         <> encode_int16(len) # RakNet Payload length
-#         <> encode_int24(0)   # RakNet Reliable message ordering
-#         <> encode_int24(0)   # RakNet Message ordering index
-#         <> encode_int8(0)    # RakNet Message ordering channel
-#         <> packet
-#   end)
-#
-#   header <> message
-# end
 
   @doc """
   Encodes a string.

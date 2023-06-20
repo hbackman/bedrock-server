@@ -167,7 +167,7 @@ defmodule RakNet.Server do
     message_body = %{
       serverId: config.guid,
       ipv4Port: config.port,
-      ipv6Port: config.port,
+      ipv6Port: config.portv6,
     } |> Advertisement.new()
       |> Advertisement.to_buffer()
 

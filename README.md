@@ -18,6 +18,10 @@ end
 
 ---
 
+### Todo
+
+- [ ] ipv6
+
 ### Notes
 
 Start an iex session with:
