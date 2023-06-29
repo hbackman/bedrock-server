@@ -97,7 +97,6 @@ defmodule BedrockServer.Client do
     packet_id: :network_setting_request,
     packet_buf: _packet_buf
   }, client) do
-
     # | Field Name                | Type  |
     # |---------------------------|-------|
     # | Compression Threshold     | short |
@@ -107,15 +106,13 @@ defmodule BedrockServer.Client do
     # | Client Throttle Scalar    | float |
 
     message = <<>>
-      <> Packet.encode_id(:network_settings)
-      <> Packet.encode_short(1) # compress everything
-      <> Packet.encode_short(1) # compress using zlib
+      <> Packet.encode_header(:network_settings, 0, 0)
+      <> Packet.encode_ushort(1) # compress everything
+      <> Packet.encode_ushort(0) # compress using zlib
       <> Packet.encode_bool(false) # Disable throttling
       <> Packet.encode_byte(0)
       <> Packet.encode_float(0)
-      |> Hexdump.inspect
-
-    message = <<0xfe, 0x0c>> <> message
+      |> Packet.encode_batch()
 
     RakNet.Connection.send(client.connection_pid, :reliable_ordered, message)
 
@@ -123,12 +120,6 @@ defmodule BedrockServer.Client do
       compression_enabled: true,
       compression_algorithm: :zlib,
     }}
-  end
-
-  def handle_cast({type, buf}, client) do
-    IO.inspect type
-    Hexdump.inspect buf
-    {:noreply, client}
   end
 
   defp decode_batch(buf, packets \\ [])

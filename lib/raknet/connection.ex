@@ -145,7 +145,7 @@ defmodule RakNet.Connection do
 
     %{ connection |
       packet_buffer: connection.packet_buffer ++ new_buffers,
-      packet_sequence: connection.packet_sequence + num_buffers
+      packet_sequence: connection.packet_sequence + num_buffers,
     }
   end
 
@@ -156,13 +156,14 @@ defmodule RakNet.Connection do
       connection
     else
       <<>>
-        <> Packet.encode_msg(:data_packet_4)
+        <> Packet.encode_msg(:data_packet_0)
         <> Packet.encode(buffer, connection.send_sequence)
         |> connection.send.()
 
       %{ connection |
         packet_buffer: [],
         send_sequence: connection.send_sequence + 1,
+        message_index: connection.message_index + 1,
       }
     end
   end

@@ -1,9 +1,12 @@
 defmodule BedrockServer.Packet do
 
+  import Bitwise
+
   # The current codex version.
   @codec_ver 567
 
   @packet_ids %{
+    :batch => 0xfe,
     :network_settings => 0x8f,
     :network_setting_request => 0xc1,
   }
@@ -15,6 +18,9 @@ defmodule BedrockServer.Packet do
     packet_id: nil,
     packet_buf: nil,
   ]
+
+  @send_shift 10
+  @recv_shift 12
 
   @doc """
   Returns the packet id atom from the given binary value. Defaults to :error.
@@ -40,10 +46,45 @@ defmodule BedrockServer.Packet do
   # ---------------------------------------------------------------------------
 
   @doc """
-  Encode a packet id.
+  Encodes a batch of packets.
   """
-  def encode_id(id),
-    do: <<to_binary(id)>>
+  def encode_batch(packets) when is_bitstring(packets),
+    do: encode_batch([packets])
+
+  def encode_batch(packets) when is_list(packets) do
+    batch = packets
+      |> Enum.map(fn packet ->
+        length = byte_size(packet)
+          |> encode_uvarint()
+        length <> packet
+      end)
+      |> Enum.join()
+
+    <<to_binary(:batch), batch::binary>>
+  end
+
+  @doc """
+  Encode a packet header.
+  """
+  def encode_header(id, send_sid, recv_sid) do
+    encode_uvarint(
+      to_binary(id)
+      |> bor(bsr(send_sid, @send_shift))
+      |> bor(bsr(recv_sid, @recv_shift))
+    )
+  end
+
+  @doc """
+  Encode an unsigned variable size int.
+  """
+  def encode_uvarint(v) when v in 0..4_294_967_295,
+    do: encode_uvarint(v, "")
+
+  defp encode_uvarint(v, a) when v > 127,
+    do: encode_uvarint(v >>> 7, <<a::binary, 1::1, v::7>>)
+
+  defp encode_uvarint(v, a) when v <= 127,
+    do: <<a::binary, 0::1, v::7>>
 
   @doc """
   Encode a boolean value.
@@ -56,6 +97,12 @@ defmodule BedrockServer.Packet do
   """
   def encode_short(v),
     do: RakNet.Packet.encode_int16(v)
+
+  def encode_ushort(v) do
+    <<>>
+      <> encode_byte(v)
+      <> encode_byte(v <<< 8)
+  end
 
   @doc """
   Encode a byte sized integer.

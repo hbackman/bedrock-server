@@ -1,11 +1,12 @@
 defmodule RakNet.Packet do
 
-  alias RakNet.Reliability
-  alias RakNet.Message
-
   @moduledoc """
   Base serialization and deserialization routines for packets.
   """
+
+  alias RakNet.Reliability
+  alias RakNet.Message
+
   import Bitwise
 
   # ------------------------------------------------------------
@@ -222,7 +223,6 @@ defmodule RakNet.Packet do
       end
 
     header <> message <> packet.message_buffer
-      # |> Hexdump.inspect
   end
 
   @doc """
