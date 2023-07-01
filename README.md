@@ -30,24 +30,75 @@ Start an iex session with:
 iex -S mix
 ```
 
-Now, send messages to the UDP server from another terminal:
-
-```console
-echo "hello world" | nc -u -w0 0.0.0.0 19132
-```
-
-Now, try to send a quit message:
-
-```console
-echo "quit" | nc -u -w0 0.0.0.0 19132
-```
-
-Windows:
-```console
-ncat.exe -u 172.19.221.219 19132
-```
-
 # RakNet
+
+## Reliability
+
+### Frame Set Packet
+
+<table>
+<tr>
+  <th>Packet ID</th>
+  <th colspan="3">Field Name</th>
+  <th>Field Type</th>
+  <th>Notes</th>
+</tr>
+<tr>
+  <td rowspan="11">0x80..0x8d</td>
+  <td colspan="3">Sequence number</td>
+  <td>uint24le</td>
+  <td></td>
+</tr>
+<tr>
+  <td rowspan="10">Frames</td>
+  <td colspan="2">Flags</td>
+  <td>byte</td>
+  <td>Top 3 bits are reliability type, fourth bit is 1 when the frame is fragmented and part of a compound.</td>
+</tr>
+<tr>
+  <td colspan="2">Length IN BITS</td>
+  <td>unsigned short</td>
+  <td>Length of the body in bits.</td>
+</tr>
+<tr>
+  <td colspan="2">Reliable frame index</td>
+  <td>uint24le</td>
+  <td>only if reliable</td>
+</tr>
+<tr>
+  <td colspan="2">Sequenced frame index</td>
+  <td>uint24le</td>
+  <td>only if sequenced</td>
+</tr>
+<tr>
+  <td rowspan="2">Order</td>
+  <td>Ordered frame index</td>
+  <td>uint24le</td>
+  <td rowspan="2">only if ordered</td>
+</tr>
+<tr>
+  <td>Order channel</td>
+  <td>byte</td>
+</tr>
+<tr>
+  <td rowspan="3">Fragment</td>
+  <td>Compound size</td>
+  <td>int</td>
+  <td rowspan="3">only if fragmented</td>
+</tr>
+<tr>
+  <td>Compound ID</td>
+  <td>short</td>
+</tr>
+<tr>
+  <td>Index</td>
+  <td>int</td>
+</tr>
+<tr>
+    <td>Body</td>
+    <td>ceil(length/8) bytes</td>
+  </tr>
+</table>
 
 ## Handshake
 

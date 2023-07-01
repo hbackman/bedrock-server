@@ -31,7 +31,7 @@ defmodule RakNet.Connection do
 
   @use_security 0
 
-  @sync_ms 10
+  @sync_ms 50
   @ping_ms 5000
 
   defmodule State do
@@ -193,37 +193,17 @@ defmodule RakNet.Connection do
   end
 
   # Handles a :open_connection_request_1 message.
-  #
-  # | Field Name       | Type  | Notes        |
-  # |------------------|-------|--------------|
-  # | Packet ID        | i8    | 0x06         |
-  # | Offline          | magic |              |
-  # | Protocol Version | i8    | Currently 11 |
-  # | MTU              | null  | Null padding |
-  def handle_cast({:open_connection_request_1, _data}, connection) do
+
+  def handle_cast({:open_connection_request_1, data}, connection) do
     log(connection, :debug, "Received open connection request 1")
 
-    # | Field Name | Type  | Notes                    |
-    # |------------|-------|--------------------------|
-    # | Packet ID  | i8    | 0x06                     |
-    # | Offline    | magic |                          |
-    # | Server ID  | i64   |                          |
-    # | Security   | bool  | This is false.           |
-    # | MTU        | i16   | This is the MTU length.  |
-
-    message = <<>>
-      <> Packet.encode_msg(:open_connection_reply_1)
-      <> Message.offline()
-      <> Packet.encode_int64(connection.server_identifier)
-      <> Packet.encode_bool(false)
-      <> Packet.encode_int16(1400)
-      #|> Hexdump.inspect
-
-    Logger.debug("Sending open connection reply 1")
-
-    connection.send.(message)
-
-    {:noreply, connection}
+    with {:ok, packet} <- RakNet.Protocol.OpenConnectionRequest1.decode(data),
+         {:ok, result} <- RakNet.Protocol.OpenConnectionRequest1.handle(packet, connection)
+    do
+      {:noreply, result}
+    else
+      {:error, error} -> raise error
+    end
   end
 
   # Handles a :open_connection_request_2 message.
@@ -255,7 +235,7 @@ defmodule RakNet.Connection do
 
     message = <<>>
       <> Message.binary(:open_connection_reply_2, true)
-      <> Message.offline()
+      <> Packet.offline()
       <> Packet.encode_int64(connection.server_identifier)
       <> Packet.encode_ip(4, host, port)
       <> Packet.encode_int16(1400)

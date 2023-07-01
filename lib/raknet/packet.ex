@@ -48,6 +48,13 @@ defmodule RakNet.Packet do
     quote do: big-size(64)
   end
 
+  defmacro magic do
+    quote do: binary-size(16)
+  end
+
+  # "Magic" bytes used to distinguish offline messages from garbage
+  def offline, do: <<0x00, 0xff, 0xff, 0x00, 0xfe, 0xfe, 0xfe, 0xfe, 0xfd, 0xfd, 0xfd, 0xfd, 0x12, 0x34, 0x56, 0x78>>
+
   # ------------------------------------------------------------
   # Decode
   # ------------------------------------------------------------

@@ -94,7 +94,7 @@ defmodule RakNetTest do
     msg = <<>>
       <> Message.binary(:unconnected_ping, true)
       <> encode_timestamp(RakNet.Server.timestamp())
-      <> Message.offline()
+      <> Packet.offline()
 
     server = make_server!()
     sender = make_sender!(server)
@@ -129,7 +129,7 @@ defmodule RakNetTest do
   defp send_connection_request_1({server, sender}) do
     msg = <<>>
       <> Message.binary(:open_connection_request_1, true)
-      <> Message.offline()
+      <> Packet.offline()
       <> Packet.encode_int8(11)
       <> <<0x00, 0x00>>
 
@@ -163,7 +163,7 @@ defmodule RakNetTest do
     cnf = Server.config(server)
     msg = <<>>
       <> Message.binary(:open_connection_request_2, true)
-      <> Message.offline()
+      <> Packet.offline()
       <> Packet.encode_ip(4, cnf.host, cnf.port)
       <> Packet.encode_int8(1400)
 

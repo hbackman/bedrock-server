@@ -53,9 +53,6 @@ defmodule RakNet.Message do
     :game_packet   => 0xFE,
   }
 
-  # "Magic" bytes used to distinguish offline messages from garbage
-  def offline, do: <<0x00, 0xff, 0xff, 0x00, 0xfe, 0xfe, 0xfe, 0xfe, 0xfd, 0xfd, 0xfd, 0xfd, 0x12, 0x34, 0x56, 0x78>>
-
   @doc """
   The message atom name for the message. Default to :error.
   """

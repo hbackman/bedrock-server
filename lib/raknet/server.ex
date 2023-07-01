@@ -32,6 +32,7 @@ defmodule RakNet.Server do
     #   - active: gen_udp will handle data reception and send us a message `{:udp,
     #     socket, address, port, data}` when new data arrives.
     #   - ip: this binds the server to the given ip.
+    #
     {:ok, socket} = :gen_udp.open(port, [
       :binary,
       {:ip, host}
@@ -162,7 +163,7 @@ defmodule RakNet.Server do
       <> Message.binary(:unconnected_pong, true)
       <> <<ping_time::size(64)>>
       <> Packet.encode_int64(config.guid)
-      <> Message.offline()
+      <> Packet.offline()
 
     message_body = %{
       serverId: config.guid,
@@ -176,10 +177,9 @@ defmodule RakNet.Server do
     {:ok}
   end
 
-  defp handle_message(_socket, _config, _client, type, data) do
-    {:ok}
-  end
-
+  @doc """
+  Return the server config.
+  """
   @impl GenServer
   def handle_call(:config, _from, config) do
     {:reply, config, config}
