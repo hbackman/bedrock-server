@@ -15,7 +15,7 @@ defmodule RakNet.Protocol.OpenConnectionRequest1 do
 
   defstruct [
       :protocol,
-      :mtu_size,
+      :mtu,
   ]
 
   @impl Packet
@@ -33,7 +33,7 @@ defmodule RakNet.Protocol.OpenConnectionRequest1 do
 
     {:ok, %__MODULE__{
       protocol: protocol,
-      mtu_size: mtu_size,
+      mtu: mtu_size,
     }}
   end
 
@@ -43,7 +43,7 @@ defmodule RakNet.Protocol.OpenConnectionRequest1 do
       <> encode_msg(packet_id())
       <> offline()
       <> encode_int8(packet.protocol)
-      <> String.duplicate(<<0>>, packet.mtu_size)
+      <> String.duplicate(<<0>>, packet.mtu)
     {:ok, buffer}
   end
 end

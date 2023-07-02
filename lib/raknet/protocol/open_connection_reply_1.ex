@@ -32,6 +32,8 @@ defmodule RakNet.Protocol.OpenConnectionReply1 do
       mtu::int16
     >> = buffer
 
+    use_security = decode_bool(use_security)
+
     {:ok, %__MODULE__{
       server_guid: server_guid,
       use_security: use_security,

@@ -25,7 +25,7 @@ defmodule RakNet.Packet do
   end
 
   defmacro bool() do
-    quote do: size(1)
+    quote do: size(8)
   end
 
   defmacro id() do
@@ -174,6 +174,18 @@ defmodule RakNet.Packet do
     <<string::binary-size(strlen), rest::binary>> = data
     {string, rest}
   end
+
+  @doc """
+  Decodes a boolean.
+  """
+  def decode_bool(data) when is_binary(data) do
+    <<b::bool, rest::binary>> = data
+
+    {decode_bool(b), rest}
+  end
+
+  def decode_bool(0), do: false
+  def decode_bool(1), do: true
 
   # ------------------------------------------------------------
   # Encode

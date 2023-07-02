@@ -205,15 +205,14 @@ defmodule RakNet.Connection do
     {:noreply, enqueue(connection, reliability, message)}
   end
 
-  @impl GenServer
-  def handle_cast({:game_packet, data}, connection) do
-    log(connection, :debug, "Received game packet")
+  defp handle(%RakNet.Protocol.GamePacket{buffer: buffer}, connection) do
+    log(connection, :debug, "Received GamePacket")
 
     # Forward the packet to the RakNet.Client implementation. This will now handle
     # all further game packets.
-    RakNet.Client.receive(connection.client, data)
+    RakNet.Client.receive(connection.client, buffer)
 
-    {:noreply, connection}
+    {:ok, connection}
   end
 
   defp handle(%RakNet.Protocol.Ack{}, connection) do
@@ -228,6 +227,41 @@ defmodule RakNet.Connection do
     log(connection, :debug, "Received nack")
 
     # TODO: Implementation
+
+    {:ok, connection}
+  end
+
+  defp handle(%RakNet.Protocol.OpenConnectionRequest1{}, connection) do
+    log(connection, :debug, "Received OpenConnectionRequest1")
+
+    {:ok, buffer} = %RakNet.Protocol.OpenConnectionReply1{
+      server_guid: connection.server_identifier,
+      use_security: false,
+      mtu: 1400
+    } |> RakNet.Protocol.OpenConnectionReply1.encode()
+
+    connection.send.(buffer)
+
+    {:ok, connection}
+  end
+
+  defp handle(%RakNet.Protocol.OpenConnectionRequest2{mtu: mtu}, connection) do
+    log(connection, :debug, "Received OpenConnectionRequest2")
+
+    %{
+      host: host,
+      port: port,
+    } = connection
+
+    {:ok, buffer} = %RakNet.Protocol.OpenConnectionReply2{
+      server_id: connection.server_identifier,
+      client_host: host,
+      client_port: port,
+      mtu: mtu,
+      use_encryption: false,
+    } |> RakNet.Protocol.OpenConnectionReply2.encode()
+
+    connection.send.(buffer)
 
     {:ok, connection}
   end
@@ -293,41 +327,6 @@ defmodule RakNet.Connection do
     log(connection, :debug, "Received ConnectedPong")
 
     # Do nothing.
-
-    {:ok, connection}
-  end
-
-  defp handle(%RakNet.Protocol.OpenConnectionRequest1{}, connection) do
-    log(connection, :debug, "Received OpenConnectionRequest1")
-
-    {:ok, buffer} = %RakNet.Protocol.OpenConnectionReply1{
-      server_guid: connection.server_identifier,
-      use_security: false,
-      mtu: 1400
-    } |> RakNet.Protocol.OpenConnectionReply1.encode()
-
-    connection.send.(buffer)
-
-    {:ok, connection}
-  end
-
-  defp handle(%RakNet.Protocol.OpenConnectionRequest2{mtu: mtu}, connection) do
-    log(connection, :debug, "Received OpenConnectionRequest2")
-
-    %{
-      host: host,
-      port: port,
-    } = connection
-
-    {:ok, buffer} = %RakNet.Protocol.OpenConnectionReply2{
-      server_id: connection.server_identifier,
-      client_host: host,
-      client_port: port,
-      mtu: mtu,
-      use_encryption: false,
-    } |> RakNet.Protocol.OpenConnectionReply2.encode()
-
-    connection.send.(buffer)
 
     {:ok, connection}
   end

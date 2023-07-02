@@ -27,12 +27,12 @@ defmodule RakNet.Protocol.OpenConnectionRequest2 do
     <<
       _::magic,
       _::ip(4),
-      mtu_size::int16(),
+      mtu::int16(),
       client_id::int64(),
     >> = buffer
 
     {:ok, %__MODULE__{
-      mtu: mtu_size,
+      mtu: mtu,
       client_id: client_id,
     }}
   end
