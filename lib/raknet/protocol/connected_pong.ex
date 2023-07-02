@@ -8,10 +8,9 @@ defmodule RakNet.Protocol.ConnectedPong do
   """
 
   alias RakNet.Protocol.Packet
+  import RakNet.Packet
 
   @behaviour Packet
-
-  import RakNet.Packet
 
   defstruct [
     :ping_time,
@@ -33,10 +32,5 @@ defmodule RakNet.Protocol.ConnectedPong do
       <> encode_timestamp(packet.ping_time)
       <> encode_timestamp(packet.pong_time)
     {:ok, buffer}
-  end
-
-  @impl Packet
-  def handle(_packet, connection) do
-    {:ok, connection}
   end
 end

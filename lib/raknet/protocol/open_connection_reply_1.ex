@@ -10,10 +10,9 @@ defmodule RakNet.Protocol.OpenConnectionReply1 do
   """
 
   alias RakNet.Protocol.Packet
+  import RakNet.Packet
 
   @behaviour Packet
-
-  import RakNet.Packet
 
   defstruct [
     :server_guid,
@@ -49,10 +48,5 @@ defmodule RakNet.Protocol.OpenConnectionReply1 do
       <> encode_bool(packet.use_security)
       <> encode_int16(packet.mtu)
     {:ok, buffer}
-  end
-
-  @impl Packet
-  def handle(%__MODULE__{}, connection) do
-    {:ok, connection}
   end
 end

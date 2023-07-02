@@ -43,9 +43,4 @@ defmodule RakNet.Protocol.OpenConnectionReply2 do
       <> encode_bool(packet.use_encryption)
     {:ok, buffer}
   end
-
-  @impl Packet
-  def handle(%__MODULE__{}, connection) do
-    {:ok, connection}
-  end
 end

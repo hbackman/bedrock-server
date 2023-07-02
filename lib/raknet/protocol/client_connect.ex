@@ -10,13 +10,9 @@ defmodule RakNet.Protocol.ClientConnect do
   """
 
   alias RakNet.Protocol.Packet
-  alias RakNet.Protocol.ServerHandshake
+  import RakNet.Packet
 
   @behaviour Packet
-
-  import RakNet.Packet
-  import RakNet.Connection,
-    only: [enqueue: 3]
 
   defstruct [
     :client_id,
@@ -50,22 +46,5 @@ defmodule RakNet.Protocol.ClientConnect do
   @impl Packet
   def encode(_packet) do
     {:error, :not_implemented}
-  end
-
-  @impl Packet
-  def handle(packet, connection) do
-    %{
-      host: host,
-      port: port,
-    } = connection
-
-    {:ok, buffer} = %ServerHandshake{
-      client_host: host,
-      client_port: port,
-      request_time: packet.time,
-      current_time: RakNet.Server.timestamp(),
-    } |> ServerHandshake.encode()
-
-    {:ok, enqueue(connection, :reliable_ordered, buffer)}
   end
 end

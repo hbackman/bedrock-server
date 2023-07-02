@@ -11,10 +11,9 @@ defmodule RakNet.Protocol.ServerHandshake do
   """
 
   alias RakNet.Protocol.Packet
+  import RakNet.Packet
 
   @behaviour Packet
-
-  import RakNet.Packet
 
   defstruct [
     :client_host,
@@ -44,10 +43,5 @@ defmodule RakNet.Protocol.ServerHandshake do
       <> encode_timestamp(packet.request_time)
       <> encode_timestamp(packet.current_time)
     {:ok, buffer}
-  end
-
-  @impl Packet
-  def handle(_packet, connection) do
-    {:ok, connection}
   end
 end

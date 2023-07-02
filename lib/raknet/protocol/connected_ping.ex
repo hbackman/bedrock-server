@@ -1,5 +1,5 @@
 defmodule RakNet.Protocol.ConnectedPing do
-  @doc """
+  @moduledoc """
   | Field Name | Type | Notes                  |
   |------------|------|------------------------|
   | Packet ID  | i8   | 0x00                   |
@@ -7,13 +7,9 @@ defmodule RakNet.Protocol.ConnectedPing do
   """
 
   alias RakNet.Protocol.Packet
-  alias RakNet.Protocol.ConnectedPong
+  import RakNet.Packet
 
   @behaviour Packet
-
-  import RakNet.Packet
-  import RakNet.Connection,
-    only: [enqueue: 3]
 
   defstruct [
     :time,
@@ -33,16 +29,6 @@ defmodule RakNet.Protocol.ConnectedPing do
 
   @impl Packet
   def encode(_packet) do
-    {:ok, <<>>}
-  end
-
-  @impl Packet
-  def handle(packet, connection) do
-    {:ok, buffer} = %ConnectedPong{
-      ping_time: packet.time,
-      pong_time: RakNet.Server.timestamp(),
-    } |> ConnectedPong.encode()
-
-    {:ok, enqueue(connection, :unreliable, buffer)}
+    {:error, :not_implemented}
   end
 end

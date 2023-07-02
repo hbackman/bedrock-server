@@ -8,7 +8,7 @@ defprotocol RakNet.Client do
   @doc """
   Handles an incoming game packet.
   """
-  def receive(client, packet_type, packet_buffer)
+  def receive(client, packet_buffer)
 
   @doc """
   Handles a client disconnecting from the server.
@@ -22,16 +22,28 @@ defmodule RakNet.Connection do
   alias RakNet.Packet
   alias RakNet.Server
   alias RakNet.Reliability
-
-  import Packet
+  alias RakNet.Message
 
   require Logger
   require Packet
 
-  @use_security 0
-
   @sync_ms 50
   @ping_ms 5000
+
+  @handlers [
+    RakNet.Protocol.Ack,
+    RakNet.Protocol.Nack,
+    RakNet.Protocol.ConnectedPing,
+    RakNet.Protocol.ConnectedPong,
+    RakNet.Protocol.OpenConnectionRequest1,
+    RakNet.Protocol.OpenConnectionRequest2,
+    RakNet.Protocol.OpenConnectionReply1,
+    RakNet.Protocol.OpenConnectionReply2,
+    RakNet.Protocol.ClientConnect,
+    RakNet.Protocol.ServerHandshake,
+    RakNet.Protocol.NewIncomingConnection,
+    RakNet.Protocol.ClientDisconnect,
+  ]
 
   defmodule State do
     defstruct [
@@ -57,23 +69,20 @@ defmodule RakNet.Connection do
   @doc """
   Starts the connection without linking.
   """
-  def start(%State{} = state) do
-    GenServer.start(__MODULE__, state)
-  end
+  def start(%State{} = state),
+    do: GenServer.start(__MODULE__, state)
 
   @doc """
   Instantiate the connection.
   """
-  def start_link(%State{} = state) do
-    GenServer.start_link(__MODULE__, state)
-  end
+  def start_link(%State{} = state),
+    do: GenServer.start_link(__MODULE__, state)
 
   @doc """
   Terminate the connection.
   """
-  def stop(connection_pid) do
-    GenServer.stop(connection_pid, :shutdown)
-  end
+  def stop(connection_pid),
+    do: GenServer.stop(connection_pid, :shutdown)
 
   @doc """
   Send a message to the client.
@@ -98,31 +107,6 @@ defmodule RakNet.Connection do
     host = connection.host |> Server.ip_to_string()
 
     Logger.log(level, "[#{host}:#{port}] " <> message)
-  end
-
-  # ---------------------------------------------------------------------------
-  # Server Implementation
-  # ---------------------------------------------------------------------------
-
-  @impl GenServer
-  def init(state) do
-    {:ok, _} = :timer.send_interval(@sync_ms, :sync)
-    {:ok, state}
-  end
-
-  @impl GenServer
-  def handle_info(:sync, connection) do
-    {:noreply, connection
-      |> sync_enqueued_packets()
-      |> sync_ack_buffer()
-    }
-  end
-
-  @impl GenServer
-  def handle_info(:ping, connection) do
-    connection.send.(make_ping_buffer(connection.base_time))
-
-    {:noreply, connection}
   end
 
   def enqueue(connection, reliability, buffer) when is_atom(reliability) and is_bitstring(buffer),
@@ -186,81 +170,100 @@ defmodule RakNet.Connection do
     }
   end
 
+  # ---------------------------------------------------------------------------
+  # Server Implementation
+  # ---------------------------------------------------------------------------
+
+  @impl GenServer
+  def init(state) do
+    {:ok, _} = :timer.send_interval(@sync_ms, :sync)
+    {:ok, state}
+  end
+
+  @impl GenServer
+  def handle_info(:sync, connection) do
+    {:noreply, connection
+      |> sync_enqueued_packets()
+      |> sync_ack_buffer()
+    }
+  end
+
+  @impl GenServer
+  def handle_info(:ping, connection) do
+   # connection.send.(make_ping_buffer(connection.base_time))
+
+   # {:ok, buffer} = %RakNet.Protocol.ConnectedPong{
+   #   ping_time: time,
+   #   pong_time: RakNet.Server.timestamp(),
+   # } |> RakNet.Protocol.ConnectedPong.encode()
+
+    {:noreply, connection}
+  end
+
   @impl GenServer
   def handle_cast({:send, reliability, message}, connection) do
     {:noreply, enqueue(connection, reliability, message)}
   end
 
-  # Handles a :open_connection_request_1 message.
-  #
   @impl GenServer
-  def handle_cast({:open_connection_request_1, data}, connection) do
-    log(connection, :debug, "Received open connection request 1")
+  def handle_cast({:game_packet, data}, connection) do
+    log(connection, :debug, "Received game packet")
 
-    with {:ok, packet} <- RakNet.Protocol.OpenConnectionRequest1.decode(data),
-         {:ok, result} <- RakNet.Protocol.OpenConnectionRequest1.handle(packet, connection)
-    do
-      {:noreply, result}
-    else
-      {:error, error} -> raise error
-    end
+    # Forward the packet to the RakNet.Client implementation. This will now handle
+    # all further game packets.
+    RakNet.Client.receive(connection.client, data)
+
+    {:noreply, connection}
   end
 
-  # Handles a :open_connection_request_2 message.
-  #
-  @impl GenServer
-  def handle_cast({:open_connection_request_2, data}, connection) do
-    log(connection, :debug, "Received open connection request 2")
+  defp handle(%RakNet.Protocol.Ack{}, connection) do
+    log(connection, :debug, "Received ack")
 
-    with {:ok, packet} <- RakNet.Protocol.OpenConnectionRequest2.decode(data),
-         {:ok, result} <- RakNet.Protocol.OpenConnectionRequest2.handle(packet, connection)
-    do
-      {:noreply, result}
-    else
-      {:error, error} -> raise error
-    end
+    # TODO: Implementation
+
+    {:ok, connection}
   end
 
-  # Handles a :client_connect message.
-  #
-  @impl GenServer
-  def handle_cast({:client_connect, data}, connection) do
-    log(connection, :debug, "Received client connect")
+  defp handle(%RakNet.Protocol.Nack{}, connection) do
+    log(connection, :debug, "Received nack")
 
-    with {:ok, packet} <- RakNet.Protocol.ClientConnect.decode(data),
-         {:ok, result} <- RakNet.Protocol.ClientConnect.handle(packet, connection)
-    do
-      {:noreply, result}
-    else
-      {:error, error} -> raise error
-    end
+    # TODO: Implementation
+
+    {:ok, connection}
   end
 
-  # Handles a :client_handshake message.
-  #
-  # | Field Name    | Type | Notes                   |
-  # |---------------|------|-------------------------|
-  # | Server Addr   | addr |                         |
-  # | Internal Addr | addr | Unknown what this does. |
-  @impl GenServer
-  def handle_cast({:client_handshake, data}, connection) do
-    log(connection, :debug, "Received client handshake")
+  defp handle(%RakNet.Protocol.ClientConnect{time: time}, connection) do
+    log(connection, :debug, "Received ClientConnect")
 
-    addresses_length = bit_size(data) - 2 * 64
+    %{
+      host: host,
+      port: port,
+    } = connection
 
-    <<
-      _::bitstring-size(addresses_length),
-      ping_time::timestamp,
-      _pong_time::timestamp,
-    >> = data
+    {:ok, buffer} = %RakNet.Protocol.ServerHandshake{
+      client_host: host,
+      client_port: port,
+      request_time: time,
+      current_time: RakNet.Server.timestamp(),
+    } |> RakNet.Protocol.ServerHandshake.encode()
 
-    # We should reply with a connected ping, then configure the server to ping the
-    # client each 5 seconds.
+    {:ok, enqueue(connection, :unreliable, buffer)}
+  end
 
-    connection = enqueue(connection, :unreliable, [
-      make_ping_buffer(connection.base_time),
-      #make_pong_buffer(ping_time, connection.base_time),
-    ])
+  defp handle(%RakNet.Protocol.ClientDisconnect{}, connection) do
+    log(connection, :debug, "Received ClientDisconnect")
+
+    # Notify the handler that the client has been disconnected.
+    RakNet.Client.disconnect(connection.client)
+
+    # Exit the connection.
+    Process.exit(self(), :normal)
+
+    {:ok, connection}
+  end
+
+  defp handle(%RakNet.Protocol.NewIncomingConnection{}, connection) do
+    log(connection, :debug, "Received NewIncomingConnection")
 
     {:ok, _} = :timer.send_interval(@ping_ms, :ping)
 
@@ -272,105 +275,115 @@ defmodule RakNet.Connection do
       connection.client_data
     )
 
-    {:noreply, %{connection | client: client }}
+    {:ok, %{connection | client: client}}
+  end
+
+  defp handle(%RakNet.Protocol.ConnectedPing{time: time}, connection) do
+    log(connection, :debug, "Received ConnectedPing")
+
+    {:ok, buffer} = %RakNet.Protocol.ConnectedPong{
+      ping_time: time,
+      pong_time: RakNet.Server.timestamp(),
+    } |> RakNet.Protocol.ConnectedPong.encode()
+
+    {:ok, enqueue(connection, :unreliable, buffer)}
+  end
+
+  defp handle(%RakNet.Protocol.ConnectedPong{}, connection) do
+    log(connection, :debug, "Received ConnectedPong")
+
+    # Do nothing.
+
+    {:ok, connection}
+  end
+
+  defp handle(%RakNet.Protocol.OpenConnectionRequest1{}, connection) do
+    log(connection, :debug, "Received OpenConnectionRequest1")
+
+    {:ok, buffer} = %RakNet.Protocol.OpenConnectionReply1{
+      server_guid: connection.server_identifier,
+      use_security: false,
+      mtu: 1400
+    } |> RakNet.Protocol.OpenConnectionReply1.encode()
+
+    connection.send.(buffer)
+
+    {:ok, connection}
+  end
+
+  defp handle(%RakNet.Protocol.OpenConnectionRequest2{mtu: mtu}, connection) do
+    log(connection, :debug, "Received OpenConnectionRequest2")
+
+    %{
+      host: host,
+      port: port,
+    } = connection
+
+    {:ok, buffer} = %RakNet.Protocol.OpenConnectionReply2{
+      server_id: connection.server_identifier,
+      client_host: host,
+      client_port: port,
+      mtu: mtu,
+      use_encryption: false,
+    } |> RakNet.Protocol.OpenConnectionReply2.encode()
+
+    connection.send.(buffer)
+
+    {:ok, connection}
   end
 
   @impl GenServer
-  def handle_cast({:ack, _data}, connection) do
-    log(connection, :debug, "Received ack")
+  def handle_cast({message_type, data}, connection) do
+    if Message.data_packet?(message_type) do
+      <<sequence::little-size(24), data::binary>> = data
 
-    # TODO: Implementation
+      encapsulated = Packet.decode_packets(data)
 
-    {:noreply, connection}
-  end
-
-  @impl GenServer
-  def handle_cast({:nack, _data}, connection) do
-    log(connection, :debug, "Received nack")
-
-    # TODO: Implementation
-
-    {:noreply, connection}
-  end
-
-  # Handles a :connected_ping by the client.
-  #
-  @impl GenServer
-  def handle_cast({:connected_ping, data}, connection) do
-    log(connection, :debug, "Received connected ping")
-
-    with {:ok, packet} <- RakNet.Protocol.ConnectedPing.decode(data),
-         {:ok, result} <- RakNet.Protocol.ConnectedPing.handle(packet, connection)
-    do
-      {:noreply, result}
+      {:noreply, encapsulated
+        |> Enum.reduce(connection, fn packet, conn ->
+          {:noreply, conn} = handle_cast({packet.message_id, packet.message_buffer}, conn)
+          conn
+        end)
+        |> buffer_ack(sequence)
+      }
     else
-      {:error, error} -> raise error
+      case handle_packet(message_type, data, connection) do
+        {:ok, connection} ->
+          {:noreply, connection}
+
+        {:error, _} ->
+          Logger.error("Unknown message #{message_type}")
+
+          {:noreply, connection}
+      end
     end
   end
 
-  # Handles a :connected_pong by the client.
-  @impl GenServer
-  def handle_cast({:connected_pong, _}, connection) do
-    {:noreply, connection}
+  defp handle_packet(message_id, message, connection) do
+    case decode_packet(message_id, message) do
+      {:ok, packet} ->
+        handle(packet, connection)
+
+      {:error, _} ->
+        raise "Unknown message #{message_id}"
+    end
   end
 
-  # Handles a :client_disconnect message.
+  # Find a packet by its message id.
   #
-  # | Field Name | Type | Notes |
-  # |------------|------|-------|
-  # | Packet ID  | i8   | 0x13  |
-  @impl GenServer
-  def handle_cast({:client_disconnect, _data}, connection) do
-    log(connection, :debug, "Received client disconnect")
+  defp decode_packet(message_id, message) do
+    packet = Enum.find(@handlers, fn h ->
+      message_id == h.packet_id()
+    end)
 
-    Process.exit(self(), :normal)
-
-    {:noreply, connection}
-  end
-
-  @impl GenServer
-  def handle_cast({:game_packet, data}, connection) do
-    log(connection, :debug, "Received game packet")
-
-    # Forward the packet to the RakNet.Client implementation. This will now handle
-    # all further game packets.
-    RakNet.Client.receive(connection.client, :game_packet, data)
-
-    {:noreply, connection}
-  end
-
-  @impl GenServer
-  def handle_cast({type, data}, connection) do
-    log(connection, :debug, "Received #{type}")
-
-    <<sequence::little-size(24), data::binary>> = data
-
-    decoded = Packet.decode_packets(data)
-
-    {:noreply, decoded
-      |> Enum.reduce(connection, fn packet, conn ->
-        {:noreply, conn} = handle_cast({packet.message_id, packet.message_buffer}, conn)
-        conn
-      end)
-      |> buffer_ack(sequence)
-    }
+    case packet do
+      nil    -> {:error, :unknown_packet_id}
+      packet -> packet.decode(message)
+    end
   end
 
   defp buffer_ack(connection, packet_index) when is_integer(packet_index) do
     %{connection | ack_buffer: [packet_index | connection.ack_buffer]}
-  end
-
-  defp make_ping_buffer(base_time) do
-    <<>>
-      <> Packet.encode_msg(:connected_ping)
-      <> Packet.encode_timestamp(RakNet.Server.timestamp(base_time))
-  end
-
-  defp make_pong_buffer(base_time, ping_time) do
-    <<>>
-      <> Packet.encode_msg(:connected_pong)
-      <> Packet.encode_timestamp(ping_time)
-      <> Packet.encode_timestamp(RakNet.Server.timestamp(base_time))
   end
 
 end

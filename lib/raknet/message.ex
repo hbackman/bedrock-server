@@ -53,6 +53,14 @@ defmodule RakNet.Message do
   }
 
   @doc """
+  Check if the given id is a data packet.
+  """
+  def data_packet?(message_id) do
+    binary(message_id) >= binary(:data_packet_0) and
+    binary(message_id) <= binary(:data_packet_F)
+  end
+
+  @doc """
   The message atom name for the message. Default to :error.
   """
   def name(message_binary) when is_integer(message_binary) do

@@ -15,9 +15,4 @@ defmodule RakNet.Protocol.Packet do
   """
   @callback encode(map()) :: {:ok, bitstring()} | {:error, any()}
 
-  @doc """
-  Handle a packet.
-  """
-  @callback handle(struct(), struct()) :: {:ok, struct()} | {:error, any()}
-
 end

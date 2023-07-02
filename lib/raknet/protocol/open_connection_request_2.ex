@@ -10,11 +10,9 @@ defmodule RakNet.Protocol.OpenConnectionRequest2 do
   """
 
   alias RakNet.Protocol.Packet
-  alias RakNet.Protocol.OpenConnectionReply2
+  import RakNet.Packet
 
   @behaviour Packet
-
-  import RakNet.Packet
 
   defstruct [
     :mtu,
@@ -42,25 +40,5 @@ defmodule RakNet.Protocol.OpenConnectionRequest2 do
   @impl Packet
   def encode(_packet) do
     {:error, :not_implemented}
-  end
-
-  @impl Packet
-  def handle(packet, connection) do
-    %{
-      host: host,
-      port: port,
-    } = connection
-
-    {:ok, buffer} = %OpenConnectionReply2{
-      server_id: connection.server_identifier,
-      client_host: host,
-      client_port: port,
-      mtu: packet.mtu,
-      use_encryption: false,
-    } |> OpenConnectionReply2.encode()
-
-    connection.send.(buffer)
-
-    {:ok, connection}
   end
 end

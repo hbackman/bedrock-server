@@ -20,11 +20,14 @@ defimpl RakNet.Client, for: BedrockServer.Client.State do
     state
   end
 
-  def receive(%BedrockServer.Client.State{session_id: id}, packet_type, packet_buffer) do
-    BedrockServer.Client.recieve(id, packet_type, packet_buffer)
+  def receive(%BedrockServer.Client.State{session_id: id}, buffer) do
+    BedrockServer.Client.recieve(id, buffer)
   end
 
   def disconnect(%BedrockServer.Client.State{session_id: id}) do
+
+    IO.inspect "CLIENT DISCONNECT"
+
     BedrockServer.Client.disconnect(id)
   end
 end
@@ -48,7 +51,7 @@ defmodule BedrockServer.Client do
   @doc """
   Handle a game packet.
   """
-  def recieve(session_id, _packet_type, buffer) do
+  def recieve(session_id, buffer) do
     case lookup(session_id) do
       nil -> nil
       pid ->
