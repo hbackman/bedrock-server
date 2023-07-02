@@ -126,10 +126,10 @@ defmodule RakNet.Connection do
     {:noreply, connection}
   end
 
-  defp enqueue(connection, reliability, buffer) when is_atom(reliability) and is_bitstring(buffer),
+  def enqueue(connection, reliability, buffer) when is_atom(reliability) and is_bitstring(buffer),
     do: enqueue(connection, reliability, [buffer])
 
-  defp enqueue(connection, reliability, buffers) when is_atom(reliability) and is_list(buffers) do
+  def enqueue(connection, reliability, buffers) when is_atom(reliability) and is_list(buffers) do
     num_buffers = length(buffers)
     new_buffers = buffers
       |> Enum.zip(0..(num_buffers - 1))
@@ -193,7 +193,8 @@ defmodule RakNet.Connection do
   end
 
   # Handles a :open_connection_request_1 message.
-
+  #
+  @impl GenServer
   def handle_cast({:open_connection_request_1, data}, connection) do
     log(connection, :debug, "Received open connection request 1")
 
@@ -208,92 +209,32 @@ defmodule RakNet.Connection do
 
   # Handles a :open_connection_request_2 message.
   #
-  # | Field Name  | Type  | Notes |
-  # |-------------|-------|-------|
-  # | Packet ID   | i8    | 0x07  |
-  # | Offline     | magic |       |
-  # | Server Addr | addr  |       |
-  # | MTU         | i16   |       |
-  # | Client ID   | i64   |       |
   @impl GenServer
-  def handle_cast({:open_connection_request_2, _data}, connection) do
+  def handle_cast({:open_connection_request_2, data}, connection) do
     log(connection, :debug, "Received open connection request 2")
 
-    %{
-      host: host,
-      port: port,
-    } = connection
-
-    # | Field Name  | Type  | Notes                  |
-    # |-------------|-------|------------------------|
-    # | Packet ID   | i8    | 0x08                   |
-    # | Offline     | magic |                        |
-    # | Server ID   | i64   |                        |
-    # | Client Addr | addr  |                        |
-    # | MTU         | i16   |                        |
-    # | Encryption  | bool  | This is false for now. |
-
-    message = <<>>
-      <> Message.binary(:open_connection_reply_2, true)
-      <> Packet.offline()
-      <> Packet.encode_int64(connection.server_identifier)
-      <> Packet.encode_ip(4, host, port)
-      <> Packet.encode_int16(1400)
-      <> Packet.encode_bool(false)
-      #|> Hexdump.inspect
-
-    Logger.debug("Sending open connection reply 2")
-
-    connection.send.(message)
-
-    {:noreply, connection}
+    with {:ok, packet} <- RakNet.Protocol.OpenConnectionRequest2.decode(data),
+         {:ok, result} <- RakNet.Protocol.OpenConnectionRequest2.handle(packet, connection)
+    do
+      {:noreply, result}
+    else
+      {:error, error} -> raise error
+    end
   end
 
   # Handles a :client_connect message.
   #
-  # | Field Name | Type | Notes                  |
-  # |------------|------|------------------------|
-  # | Packet ID  | i8   | 0x09                   |
-  # | GUID       | i64  | Not sure what this is. |
-  # | Time       | i64  |                        |
-  # | Security   | i8   | Not sure what this is. |
-  # | Password   | ---- | Maybe related to ^     |
   @impl GenServer
   def handle_cast({:client_connect, data}, connection) do
     log(connection, :debug, "Received client connect")
 
-    <<_client_id::int64, time_sent::int64, @use_security::int8>> = data
-
-    send_pong = RakNet.Server.timestamp()
-
-    %{
-      host: host,
-      port: port,
-    } = connection
-
-    # | Field Name   | Type     | Notes                                            |
-    # |--------------|----------|--------------------------------------------------|
-    # | Packet ID    | i8       | 0x10                                             |
-    # | Client Addr  | addr     |                                                  |
-    # | System Index | i8       | Unknown what this does. Zero works.              |
-    # | Internal IDs | addr 10x | Unknown what this does. Empty ips seems to work. |
-    # | Request Time | i64      |                                                  |
-    # | Current Time | i64      |                                                  |
-
-    message = <<>>
-      <> Packet.encode_msg(:server_handshake)
-      <> Packet.encode_ip(4, host, port)
-      <> Packet.encode_int16(0)
-      <> :erlang.list_to_binary(List.duplicate(
-        Packet.encode_ip(4, {255, 255, 255, 255}, 19132), 10
-      ))
-      <> Packet.encode_timestamp(time_sent)
-      <> Packet.encode_timestamp(send_pong)
-      #|> Hexdump.inspect
-
-    Logger.debug("Sent server handshake")
-
-    {:noreply, enqueue(connection, :reliable_ordered, message)}
+    with {:ok, packet} <- RakNet.Protocol.ClientConnect.decode(data),
+         {:ok, result} <- RakNet.Protocol.ClientConnect.handle(packet, connection)
+    do
+      {:noreply, result}
+    else
+      {:error, error} -> raise error
+    end
   end
 
   # Handles a :client_handshake message.
