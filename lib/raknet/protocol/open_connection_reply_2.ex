@@ -29,7 +29,7 @@ defmodule RakNet.Protocol.OpenConnectionReply2 do
 
   @impl Packet
   def decode(_buffer) do
-    {:ok, %__MODULE__{}}
+    {:error, :not_implemented}
   end
 
   @impl Packet

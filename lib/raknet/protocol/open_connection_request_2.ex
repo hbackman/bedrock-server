@@ -41,7 +41,7 @@ defmodule RakNet.Protocol.OpenConnectionRequest2 do
 
   @impl Packet
   def encode(_packet) do
-    {:ok, <<>>}
+    {:error, :not_implemented}
   end
 
   @impl Packet

@@ -274,7 +274,7 @@ defmodule RakNetTest do
 #    >>}, 500
 #  end
 
-#  test ":client_handshake" do
+#  test ":new_incoming_connection" do
 #    # Attempt to send a client handshake message to the connection.
 #    # Format:
 #    #   - server_ip
@@ -289,7 +289,7 @@ defmodule RakNetTest do
 #
 #    {:ok, pid} = Connection.start(new_connection())
 #
-#    Connection.handle_message(pid, :client_handshake, msg)
+#    Connection.handle_message(pid, :new_incoming_connection, msg)
 #
 #    receive do
 #      {:sent} -> assert false

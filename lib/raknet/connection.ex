@@ -19,7 +19,6 @@ end
 defmodule RakNet.Connection do
   use GenServer, restart: :transient
 
-  alias RakNet.Message
   alias RakNet.Packet
   alias RakNet.Server
   alias RakNet.Reliability
@@ -295,15 +294,18 @@ defmodule RakNet.Connection do
   end
 
   # Handles a :connected_ping by the client.
+  #
   @impl GenServer
   def handle_cast({:connected_ping, data}, connection) do
     log(connection, :debug, "Received connected ping")
 
-    <<ping_time::size(64)>> = data
-
-    message = make_pong_buffer(connection.base_time, ping_time)
-
-    {:noreply, enqueue(connection, :unreliable, message)}
+    with {:ok, packet} <- RakNet.Protocol.ConnectedPing.decode(data),
+         {:ok, result} <- RakNet.Protocol.ConnectedPing.handle(packet, connection)
+    do
+      {:noreply, result}
+    else
+      {:error, error} -> raise error
+    end
   end
 
   # Handles a :connected_pong by the client.

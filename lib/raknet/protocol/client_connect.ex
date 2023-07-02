@@ -49,7 +49,7 @@ defmodule RakNet.Protocol.ClientConnect do
 
   @impl Packet
   def encode(_packet) do
-    {:ok, <<>>}
+    {:error, :not_implemented}
   end
 
   @impl Packet

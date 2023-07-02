@@ -28,8 +28,8 @@ defmodule RakNet.Protocol.ServerHandshake do
   def packet_id(), do: :server_handshake
 
   @impl Packet
-  def decode(buffer) do
-    {:ok, %__MODULE__{}}
+  def decode(_buffer) do
+    {:error, :not_implemented}
   end
 
   @impl Packet

@@ -16,13 +16,12 @@ defmodule RakNet.Message do
     :open_connection_request_2 => 0x07,
     :open_connection_reply_2   => 0x08,
 
-    # Connection request.
     :client_connect => 0x09,
-    # Connection was successful.
+    :client_disconnect => 0x15,
+
     :server_handshake => 0x10,
 
-    :client_handshake => 0x13,
-    :client_disconnect => 0x15,
+    :new_incoming_connection => 0x13,
 
     # Connection failed.
     :connection_attempt_failed => 0x11,
