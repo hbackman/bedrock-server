@@ -15,7 +15,7 @@ defmodule RakNet.Protocol.OpenConnectionReply1 do
   @behaviour Packet
 
   defstruct [
-    :server_guid,
+    :server_id,
     :use_security,
     :mtu,
   ]
@@ -27,7 +27,7 @@ defmodule RakNet.Protocol.OpenConnectionReply1 do
   def decode(buffer) do
     <<
       _::magic,
-      server_guid::int64,
+      server_id::int64,
       use_security::bool,
       mtu::int16
     >> = buffer
@@ -35,7 +35,7 @@ defmodule RakNet.Protocol.OpenConnectionReply1 do
     use_security = decode_bool(use_security)
 
     {:ok, %__MODULE__{
-      server_guid: server_guid,
+      server_id: server_id,
       use_security: use_security,
       mtu: mtu,
     }}
@@ -46,7 +46,7 @@ defmodule RakNet.Protocol.OpenConnectionReply1 do
     buffer = <<>>
       <> encode_msg(packet_id())
       <> offline()
-      <> encode_int64(packet.server_guid)
+      <> encode_int64(packet.server_id)
       <> encode_bool(packet.use_security)
       <> encode_int16(packet.mtu)
     {:ok, buffer}

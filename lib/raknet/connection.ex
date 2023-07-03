@@ -1,21 +1,3 @@
-defprotocol RakNet.Client do
-  @doc """
-  Handles a client connecting to the server. This should return the client after
-  making any changes to it.
-  """
-  def connect(client, connection_pid, module_data)
-
-  @doc """
-  Handles an incoming game packet.
-  """
-  def receive(client, packet_buffer)
-
-  @doc """
-  Handles a client disconnecting from the server.
-  """
-  def disconnect(client)
-end
-
 defmodule RakNet.Connection do
   use GenServer, restart: :transient
 
@@ -23,27 +5,15 @@ defmodule RakNet.Connection do
   alias RakNet.Server
   alias RakNet.Reliability
   alias RakNet.Message
+  alias RakNet.Protocol
 
   require Logger
   require Packet
 
+  import Packet
+
   @sync_ms 50
   @ping_ms 5000
-
-  @handlers [
-    RakNet.Protocol.Ack,
-    RakNet.Protocol.Nack,
-    RakNet.Protocol.ConnectedPing,
-    RakNet.Protocol.ConnectedPong,
-    RakNet.Protocol.OpenConnectionRequest1,
-    RakNet.Protocol.OpenConnectionRequest2,
-    RakNet.Protocol.OpenConnectionReply1,
-    RakNet.Protocol.OpenConnectionReply2,
-    RakNet.Protocol.ClientConnect,
-    RakNet.Protocol.ServerHandshake,
-    RakNet.Protocol.NewIncomingConnection,
-    RakNet.Protocol.ClientDisconnect,
-  ]
 
   defmodule State do
     defstruct [
@@ -63,6 +33,7 @@ defmodule RakNet.Connection do
       # Sequencing for whole messages.
       send_sequence: 0,
       ack_buffer: [],
+      split_buffer: [],
     ]
   end
 
@@ -101,14 +72,9 @@ defmodule RakNet.Connection do
     GenServer.cast(connection_pid, {message_type, data})
   end
 
-  # Log a message with the client prefixed.
-  defp log(connection, level, message) do
-    port = connection.port
-    host = connection.host |> Server.ip_to_string()
-
-    Logger.log(level, "[#{host}:#{port}] " <> message)
-  end
-
+  @doc """
+  Enqueue a packet.
+  """
   def enqueue(connection, reliability, buffer) when is_atom(reliability) and is_bitstring(buffer),
     do: enqueue(connection, reliability, [buffer])
 
@@ -117,7 +83,7 @@ defmodule RakNet.Connection do
     new_buffers = buffers
       |> Enum.zip(0..(num_buffers - 1))
       |> Enum.map(fn {buffer, idx} ->
-        %Reliability.Packet{
+        %Reliability.Frame{
           reliability: reliability,
           message_buffer: buffer,
           message_index: if(Reliability.is_reliable?(reliability), do: connection.message_index, else: nil),
@@ -152,7 +118,7 @@ defmodule RakNet.Connection do
   end
 
   defp sync_ack_buffer(connection) do
-    %{ ack_buffer: buffer } = connection
+    %{ack_buffer: buffer} = connection
 
     buffer
       |> Enum.reverse()
@@ -205,184 +171,131 @@ defmodule RakNet.Connection do
     {:noreply, enqueue(connection, reliability, message)}
   end
 
-  defp handle(%RakNet.Protocol.GamePacket{buffer: buffer}, connection) do
-    log(connection, :debug, "Received GamePacket")
-
-    # Forward the packet to the RakNet.Client implementation. This will now handle
-    # all further game packets.
-    RakNet.Client.receive(connection.client, buffer)
-
-    {:ok, connection}
-  end
-
-  defp handle(%RakNet.Protocol.Ack{}, connection) do
-    log(connection, :debug, "Received ack")
-
-    # TODO: Implementation
-
-    {:ok, connection}
-  end
-
-  defp handle(%RakNet.Protocol.Nack{}, connection) do
-    log(connection, :debug, "Received nack")
-
-    # TODO: Implementation
-
-    {:ok, connection}
-  end
-
-  defp handle(%RakNet.Protocol.OpenConnectionRequest1{}, connection) do
-    log(connection, :debug, "Received OpenConnectionRequest1")
-
-    {:ok, buffer} = %RakNet.Protocol.OpenConnectionReply1{
-      server_guid: connection.server_identifier,
-      use_security: false,
-      mtu: 1400
-    } |> RakNet.Protocol.OpenConnectionReply1.encode()
-
-    connection.send.(buffer)
-
-    {:ok, connection}
-  end
-
-  defp handle(%RakNet.Protocol.OpenConnectionRequest2{mtu: mtu}, connection) do
-    log(connection, :debug, "Received OpenConnectionRequest2")
-
-    %{
-      host: host,
-      port: port,
-    } = connection
-
-    {:ok, buffer} = %RakNet.Protocol.OpenConnectionReply2{
-      server_id: connection.server_identifier,
-      client_host: host,
-      client_port: port,
-      mtu: mtu,
-      use_encryption: false,
-    } |> RakNet.Protocol.OpenConnectionReply2.encode()
-
-    connection.send.(buffer)
-
-    {:ok, connection}
-  end
-
-  defp handle(%RakNet.Protocol.ClientConnect{time: time}, connection) do
-    log(connection, :debug, "Received ClientConnect")
-
-    %{
-      host: host,
-      port: port,
-    } = connection
-
-    {:ok, buffer} = %RakNet.Protocol.ServerHandshake{
-      client_host: host,
-      client_port: port,
-      request_time: time,
-      current_time: RakNet.Server.timestamp(),
-    } |> RakNet.Protocol.ServerHandshake.encode()
-
-    {:ok, enqueue(connection, :unreliable, buffer)}
-  end
-
-  defp handle(%RakNet.Protocol.ClientDisconnect{}, connection) do
-    log(connection, :debug, "Received ClientDisconnect")
-
-    # Notify the handler that the client has been disconnected.
-    RakNet.Client.disconnect(connection.client)
-
-    # Exit the connection.
-    Process.exit(self(), :normal)
-
-    {:ok, connection}
-  end
-
-  defp handle(%RakNet.Protocol.NewIncomingConnection{}, connection) do
-    log(connection, :debug, "Received NewIncomingConnection")
-
-    {:ok, _} = :timer.send_interval(@ping_ms, :ping)
-
-    client = RakNet.Client.connect(
-      # The client protocol implementation wont recognize the module name as the
-      # implementation type, so first we need to make it into a struct.
-      struct(connection.client_module, %{}),
-      self(),
-      connection.client_data
-    )
-
-    {:ok, %{connection | client: client}}
-  end
-
-  defp handle(%RakNet.Protocol.ConnectedPing{time: time}, connection) do
-    log(connection, :debug, "Received ConnectedPing")
-
-    {:ok, buffer} = %RakNet.Protocol.ConnectedPong{
-      ping_time: time,
-      pong_time: RakNet.Server.timestamp(),
-    } |> RakNet.Protocol.ConnectedPong.encode()
-
-    {:ok, enqueue(connection, :unreliable, buffer)}
-  end
-
-  defp handle(%RakNet.Protocol.ConnectedPong{}, connection) do
-    log(connection, :debug, "Received ConnectedPong")
-
-    # Do nothing.
-
-    {:ok, connection}
-  end
-
   @impl GenServer
-  def handle_cast({message_type, data}, connection) do
-    if Message.data_packet?(message_type) do
-      <<sequence::little-size(24), data::binary>> = data
+  def handle_cast({type, data}, connection) do
 
-      encapsulated = Packet.decode_packets(data)
+    if Message.data_packet?(type) do
 
-      {:noreply, encapsulated
-        |> Enum.reduce(connection, fn packet, conn ->
-          {:noreply, conn} = handle_cast({packet.message_id, packet.message_buffer}, conn)
-          conn
-        end)
-        |> buffer_ack(sequence)
-      }
+      {:noreply, handle_encapsulated!(data, connection)}
     else
-      case handle_packet(message_type, data, connection) do
-        {:ok, connection} ->
-          {:noreply, connection}
+
+      {:noreply, handle_negotiation!(type, data, connection)}
+    end
+
+    #if Message.data_packet?(message_type) do
+    #  case handle_encapsulated(data, connection) do
+    #    {:ok, connection} ->
+    #      {:noreply, connection}
+    #  end
+    #else
+    #  case handle_packet(message_type, data, connection) do
+    #    {:ok, connection} ->
+    #      {:noreply, connection}
+#
+    #    {:error, _} ->
+    #      Logger.error("Unknown message #{message_type}")
+#
+    #      {:noreply, connection}
+    #  end
+    #end
+  end
+
+  # Handle an encapsulated message. These are sent after the client has established
+  # the handshake with the server.
+  #
+  defp handle_encapsulated!(buffer, connection) do
+    <<sequence::uint24le, buffer::binary>> = buffer
+
+    frame_set = Packet.decode_packets(buffer)
+
+    connection = Enum.reduce(frame_set, connection, fn frame, conn ->
+      handle_frame!(frame, conn)
+    end)
+
+    connection |> push_ack(sequence)
+  end
+
+  # Handle a negotiation message. These are sent before the handshake.
+  #
+  defp handle_negotiation!(type, buffer, connection) do
+    case Protocol.decode_packet(type, buffer) do
+      {:ok, packet} ->
+        handle_packet(packet, connection) |> elem(1)
+
+      {:error, _} ->
+        raise "Content negotiation failed for message #{type}"
+    end
+  end
+
+  # Handle a frame.
+  #
+  defp handle_frame!(frame, connection) do
+    if frame.has_split do
+      connection
+        |> push_split(frame)
+        |> sync_split(frame)
+    else
+      # Extract the message.
+      <<
+        packet_id::id,
+        packet_bf::binary,
+      >> = frame.message_buffer
+
+      # Convert to atom.
+      packet_id = Message.name(packet_id)
+
+      case Protocol.decode_packet(packet_id, packet_bf) do
+        {:ok, packet} ->
+          handle_packet(packet, connection) |> elem(1)
 
         {:error, _} ->
-          Logger.error("Unknown message #{message_type}")
-
-          {:noreply, connection}
+          raise "Encapsulated packet failed for message #{packet_id}"
       end
     end
   end
 
-  defp handle_packet(message_id, message, connection) do
-    case decode_packet(message_id, message) do
-      {:ok, packet} ->
-        handle(packet, connection)
-
-      {:error, _} ->
-        raise "Unknown message #{message_id}"
-    end
-  end
-
-  # Find a packet by its message id.
+  # Handle a packet.
   #
-  defp decode_packet(message_id, message) do
-    packet = Enum.find(@handlers, fn h ->
-      message_id == h.packet_id()
-    end)
-
-    case packet do
-      nil    -> {:error, :unknown_packet_id}
-      packet -> packet.decode(message)
-    end
+  defp handle_packet(packet, connection) do
+    RakNet.Protocol.handle(packet, connection)
   end
 
-  defp buffer_ack(connection, packet_index) when is_integer(packet_index) do
-    %{connection | ack_buffer: [packet_index | connection.ack_buffer]}
+  defp push_ack(connection, sequence) when is_integer(sequence) do
+    %{connection | ack_buffer: [sequence | connection.ack_buffer]}
+  end
+
+  defp push_split(connection, frame) do
+    %{connection | split_buffer: [frame | connection.split_buffer]}
+  end
+
+  defp sync_split(connection, frame) do
+    fragments = connection.split_buffer
+      |> Enum.filter(& &1.split_id == frame.split_id)
+      |> Enum.sort(& &1.split_index <= &2.split_index)
+
+    if Enum.count(fragments) >= frame.split_count do
+      assembled = fragments
+        |> Enum.map(& &1.message_buffer)
+        |> Enum.join()
+        |> Hexdump.inspect
+
+      frame = %Reliability.Frame{
+        reliability: frame.reliability,
+
+        order_index: frame.order_index,
+        order_channel: frame.order_channel,
+
+        sequencing_index: frame.sequencing_index,
+
+        message_index: frame.message_index,
+        message_length: byte_size(assembled),
+        message_buffer: assembled,
+      }
+
+      handle_frame!(frame, connection)
+    else
+      connection
+    end
   end
 
 end

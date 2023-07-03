@@ -17,7 +17,7 @@ defmodule RakNetTest.Protocol.OpenConnectionReply1Test do
 
   test "encode" do
     {:ok, packet} = %OpenConnectionReply1{
-      server_guid: 123456789,
+      server_id: 123456789,
       use_security: false,
       mtu: 150,
     } |> OpenConnectionReply1.encode()
@@ -29,7 +29,7 @@ defmodule RakNetTest.Protocol.OpenConnectionReply1Test do
     {:ok, packet} = make_buffer(false)
       |> OpenConnectionReply1.decode()
 
-    assert packet.server_guid == 123456789
+    assert packet.server_id == 123456789
     assert packet.use_security == false
     assert packet.mtu == 150
   end

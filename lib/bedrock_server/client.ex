@@ -25,9 +25,6 @@ defimpl RakNet.Client, for: BedrockServer.Client.State do
   end
 
   def disconnect(%BedrockServer.Client.State{session_id: id}) do
-
-    IO.inspect "CLIENT DISCONNECT"
-
     BedrockServer.Client.disconnect(id)
   end
 end
@@ -54,14 +51,7 @@ defmodule BedrockServer.Client do
   def recieve(session_id, buffer) do
     case lookup(session_id) do
       nil -> nil
-      pid ->
-        # Bedrock packets are batched, so decode the batch, then handle them each as
-        # separate packets.
-        Enum.each(decode_batch(buffer), fn packet ->
-          packet = Packet.decode_packet(packet)
-
-          GenServer.cast(pid, packet)
-        end)
+      pid -> GenServer.cast(pid, buffer)
     end
   end
 
@@ -96,7 +86,21 @@ defmodule BedrockServer.Client do
   end
 
   @impl GenServer
-  def handle_cast(%Packet{
+  def handle_cast(buffer, client) do
+    packets = buffer
+      |> inflate(client.compression_enabled, client.compression_algorithm)
+      |> unbatch()
+
+    client = Enum.reduce(packets, client, fn packet, client ->
+      packet = Packet.decode_packet(packet)
+
+      handle_packet(packet, client)
+    end)
+
+    {:noreply, client}
+  end
+
+  defp handle_packet(%Packet{
     packet_id: :network_setting_request,
     packet_buf: _packet_buf
   }, client) do
@@ -110,7 +114,7 @@ defmodule BedrockServer.Client do
 
     message = <<>>
       <> Packet.encode_header(:network_settings, 0, 0)
-      <> Packet.encode_ushort(1) # compress everything
+      <> Packet.encode_ushort(0) # compress everything
       <> Packet.encode_ushort(0) # compress using zlib
       <> Packet.encode_bool(false) # Disable throttling
       <> Packet.encode_byte(0)
@@ -119,28 +123,35 @@ defmodule BedrockServer.Client do
 
     RakNet.Connection.send(client.connection_pid, :reliable_ordered, message)
 
-    {:noreply, %{client |
-      compression_enabled: true,
+    %{client |
+      compression_enabled: false,
       compression_algorithm: :zlib,
-    }}
+    }
   end
 
-  defp decode_batch(buf, packets \\ [])
-  defp decode_batch("", packets),
+  defp unbatch(buf, packets \\ [])
+  defp unbatch("", packets),
     do: Enum.reverse(packets)
 
-  defp decode_batch(buf, packets) do
+  defp unbatch(buf, packets) do
     {str, buf} = RakNet.Packet.decode_string(buf)
-    decode_batch(buf, [str | packets])
+    unbatch(buf, [str | packets])
   end
 
-  # Decode a bedrock packet. Bedrock uses zlib, so packets can be de-compressed using
-  # the erlang native :zlib module.
-#  defp decode(packet) do
-#    :zlib.uncompress(packet)
-#  end
-#
-#  defp encode(packet) do
-#    :zlib.compress(packet)
-#  end
+  # De-compress a minecraft bedrock packet. Im not sure what other algorithms are
+  # available, but right now it only supports zlib.
+  defp inflate(buffer, compression_enabled, compression_algorithm) do
+    if compression_enabled do
+      case compression_algorithm do
+        :zlib -> :zlib.uncompress(buffer)
+        _     -> buffer
+      end
+    else
+      buffer
+    end
+  end
+
+  #defp deflate(packet) do
+  #  :zlib.compress(packet)
+  #end
 end

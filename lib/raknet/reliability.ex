@@ -35,7 +35,7 @@ defmodule RakNet.Reliability do
 
 end
 
-defmodule RakNet.Reliability.Packet do
+defmodule RakNet.Reliability.Frame do
   defstruct [
     :reliability,
 

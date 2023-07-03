@@ -48,6 +48,10 @@ defmodule RakNet.Packet do
     quote do: big-size(64)
   end
 
+  defmacro uint24le do
+    quote do: little-size(24)
+  end
+
   defmacro magic do
     quote do: binary-size(16)
   end
@@ -115,23 +119,16 @@ defmodule RakNet.Packet do
         {nil, nil, nil, data}
       end
 
-    # Decode buffer.
-    length = length - 1
-
-    <<
-      msg_id::binary-size(1),
-      msg_bf::binary-size(length),
-      rest::binary
-    >> = data
+    <<buffer::binary-size(length), rest::binary>> = data
 
     # The message is sometimes a minecraft specific message. This doesnt match anything
     # in the message module. I will probably have to wait unwrapping the message id so
     # that a custom packet can implement the lookup.
 
-    {%Reliability.Packet{
+    {%Reliability.Frame{
       reliability: Reliability.name(reliability),
 
-      has_split: has_split,
+      has_split: has_split > 0,
 
       order_index: order_index,
       order_channel: order_channel,
@@ -143,8 +140,7 @@ defmodule RakNet.Packet do
       sequencing_index: if(is_reliable, do: nil, else: message_index),
       message_index: if(is_reliable, do: message_index, else: nil),
       message_length: length,
-      message_id: Message.name(msg_id),
-      message_buffer: msg_bf,
+      message_buffer: buffer,
     }, rest}
   end
 
@@ -203,27 +199,27 @@ defmodule RakNet.Packet do
   @doc """
   Encode encapsulated messages.
   """
-  def encode_encapsulated(packet = %Reliability.Packet{}) do
-    is_reliable = Reliability.is_reliable?(packet.reliability)
-    is_sequenced = Reliability.is_sequenced?(packet.reliability)
+  def encode_encapsulated(frame = %Reliability.Frame{}) do
+    is_reliable = Reliability.is_reliable?(frame.reliability)
+    is_sequenced = Reliability.is_sequenced?(frame.reliability)
 
     index = if is_reliable,
-      do: packet.message_index,
-    else: packet.sequencing_index
+      do: frame.message_index,
+    else: frame.sequencing_index
 
     header = <<
-      Reliability.binary(packet.reliability)::unsigned-size(3),
-      packet.has_split::unsigned-size(5),
+      Reliability.binary(frame.reliability)::unsigned-size(3),
+      frame.has_split::unsigned-size(5),
     >>
 
     message = <<
-      trunc(byte_size(packet.message_buffer) * 8)::size(16)
+      trunc(byte_size(frame.message_buffer) * 8)::size(16)
     >><> if is_reliable or is_sequenced do
         <<index::little-size(24)>> <>
           if is_sequenced do
             <<
-              packet.order_index::little-size(24),
-              packet.order_channel::size(8)
+              frame.order_index::little-size(24),
+              frame.order_channel::size(8)
             >>
           else
             <<>>
@@ -231,17 +227,17 @@ defmodule RakNet.Packet do
       else
         <<>>
       end
-      <> if packet.has_split > 0 do
+      <> if frame.has_split > 0 do
         <<
-          packet.split_count::size(32),
-          packet.split_id::size(16),
-          packet.split_index::size(32),
+          frame.split_count::size(32),
+          frame.split_id::size(16),
+          frame.split_index::size(32),
         >>
       else
         <<>>
       end
 
-    header <> message <> packet.message_buffer
+    header <> message <> frame.message_buffer
   end
 
   @doc """
