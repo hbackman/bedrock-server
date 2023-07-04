@@ -30,6 +30,9 @@ Start an iex session with:
 iex -S mix
 ```
 
+Elixir <<>> types:
+https://hexdocs.pm/elixir/1.12/Kernel.SpecialForms.html#%3C%3C%3E%3E/1
+
 # RakNet
 
 ## Reliability

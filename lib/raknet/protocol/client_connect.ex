@@ -27,9 +27,9 @@ defmodule RakNet.Protocol.ClientConnect do
   @impl Packet
   def decode(buffer) do
     <<
-      client_id::int64,
+      client_id::64-integer,
       time::timestamp,
-      security::int8,
+      security::8-integer,
       password::binary
     >> = buffer
 

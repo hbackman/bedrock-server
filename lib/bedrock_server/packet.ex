@@ -7,6 +7,9 @@ defmodule BedrockServer.Packet do
 
   @packet_ids %{
     :batch => 0xfe,
+
+    :login => 0x01,
+
     :network_settings => 0x8f,
     :network_setting_request => 0xc1,
   }
@@ -114,13 +117,13 @@ defmodule BedrockServer.Packet do
   Encode a single-precision 32-bit floating point number.
   """
   def encode_float(v),
-    do: <<v::float-32>>
+    do: <<v::32-float>>
 
   @doc """
   Encode a double-precision 64-bit floating point number.
   """
   def encode_double(v),
-    do: <<v::float-64>>
+    do: <<v::64-float>>
 
   def decode_packet(buffer) do
     <<
@@ -132,12 +135,52 @@ defmodule BedrockServer.Packet do
     >> = buffer
 
     case to_atom(packet_id) do
-      :error -> raise "Unknown packet id"
+      :error -> raise "Unknown packet id #{packet_id}"
       packet_id -> %__MODULE__{
         packet_id: packet_id,
         packet_buf: packet_buf,
       }
     end
   end
+
+  @doc """
+  Decode a json string.
+  """
+  def decode_json(buffer) do
+    {len1, buffer} = decode_int(buffer)
+    {len2, buffer} = decode_uvarint(buffer)
+
+    IO.inspect [len1, len2]
+
+    {<<>>, buffer}
+  end
+
+  @doc """
+  Decode a UTF-8 string prefixed with its size in bytes as varint.
+  """
+  def decode_string(buffer),
+    do: RakNet.Packet.decode_string(buffer)
+
+  @doc """
+  Decode a 32-bit signed integer.
+  """
+  def decode_int(buffer) do
+    <<value::32-integer, rest::binary>> = buffer
+    {value, rest}
+  end
+
+  @doc """
+  Decode a 32-bit unsigned integer.
+  """
+  def decode_uint(buffer) do
+    <<value::32-integer-unsigned, rest::binary>> = buffer
+    {value, rest}
+  end
+
+  @doc """
+  Decode a variable-sized little-endian int.
+  """
+  def decode_uvarint(buffer),
+    do: RakNet.Packet.decode_varint(buffer)
 
 end

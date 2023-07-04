@@ -32,22 +32,6 @@ defmodule RakNet.Packet do
     quote do: size(8)
   end
 
-  defmacro int8 do
-    quote do: big-size(8)
-  end
-
-  defmacro int16 do
-    quote do: big-size(16)
-  end
-
-  defmacro int24 do
-    quote do: big-size(24)
-  end
-
-  defmacro int64 do
-    quote do: big-size(64)
-  end
-
   defmacro uint24le do
     quote do: little-size(24)
   end
@@ -78,7 +62,7 @@ defmodule RakNet.Packet do
   """
   def decode_encapsulated(data) do
     # Decode reliability.
-    <<reliability::unsigned-size(3), has_split::unsigned-size(5), data::binary>> = data
+    <<reliability::3-unsigned, has_split::5-unsigned, data::binary>> = data
 
     is_reliable = Reliability.is_reliable?(reliability)
     is_sequenced = Reliability.is_sequenced?(reliability)
@@ -90,7 +74,7 @@ defmodule RakNet.Packet do
     # Decode sequence.
     {message_index, data} =
       if is_sequenced or is_reliable do
-        <<message_index::little-size(24), rest::binary>> = data
+        <<message_index::24-little, rest::binary>> = data
         {message_index, rest}
       else
         {nil, data}
@@ -99,7 +83,7 @@ defmodule RakNet.Packet do
     # Decode order.
     {order_index, order_channel, data} =
       if is_sequenced do
-        <<order_index::little-size(24), order_channel::size(8), rest::binary>> = data
+        <<order_index::24-little, order_channel::8, rest::binary>> = data
         {order_index, order_channel, rest}
       else
         {nil, nil, data}
@@ -109,9 +93,9 @@ defmodule RakNet.Packet do
     {split_count, split_id, split_index, data} =
       if has_split > 0 do
         <<
-          split_count::size(32),
-          split_id   ::size(16),
-          split_index::size(32),
+          split_count::32,
+          split_id   ::16,
+          split_index::32,
           rest::binary
         >> = data
         {split_count, split_id, split_index, rest}
@@ -207,19 +191,23 @@ defmodule RakNet.Packet do
       do: frame.message_index,
     else: frame.sequencing_index
 
+    has_split = if frame.has_split,
+      do: 1,
+    else: 0
+
     header = <<
-      Reliability.binary(frame.reliability)::unsigned-size(3),
-      frame.has_split::unsigned-size(5),
+      Reliability.binary(frame.reliability)::3-unsigned,
+      has_split::5-unsigned,
     >>
 
     message = <<
       trunc(byte_size(frame.message_buffer) * 8)::size(16)
     >><> if is_reliable or is_sequenced do
-        <<index::little-size(24)>> <>
+        <<index::24-little>> <>
           if is_sequenced do
             <<
-              frame.order_index::little-size(24),
-              frame.order_channel::size(8)
+              frame.order_index::24-little,
+              frame.order_channel::8
             >>
           else
             <<>>
@@ -227,11 +215,11 @@ defmodule RakNet.Packet do
       else
         <<>>
       end
-      <> if frame.has_split > 0 do
+      <> if frame.has_split do
         <<
-          frame.split_count::size(32),
-          frame.split_id::size(16),
-          frame.split_index::size(32),
+          frame.split_count::32,
+          frame.split_id::16,
+          frame.split_index::32,
         >>
       else
         <<>>
@@ -243,7 +231,7 @@ defmodule RakNet.Packet do
   @doc """
   Encodes a string.
   """
-  def encode_string(value) when is_bitstring(value) do
+  def encode_string(value) when is_binary(value) do
     strlen = encode_int16(byte_size(value))
     <<strlen::binary, value::binary>>
   end
@@ -255,12 +243,12 @@ defmodule RakNet.Packet do
   def encode_bool(true),  do: <<1>>
 
   def encode_byte(value),
-    do: <<value::size(1)>>
+    do: <<value::1>>
 
-  def encode_int8(value),  do: <<value::int8>>
-  def encode_int16(value), do: <<value::int16>>
-  def encode_int24(value), do: <<value::int24>>
-  def encode_int64(value), do: <<value::int64>>
+  def encode_int8(value),  do: <<value:: 8-integer>>
+  def encode_int16(value), do: <<value::16-integer>>
+  def encode_int24(value), do: <<value::24-integer>>
+  def encode_int64(value), do: <<value::64-integer>>
 
   @doc """
   Encodes an ip address.
@@ -269,10 +257,10 @@ defmodule RakNet.Packet do
     {a1, a2, a3, a4} = address
 
     encode_int8(4)     <>
-    <<255-a1::size(8)>> <>
-    <<255-a2::size(8)>> <>
-    <<255-a3::size(8)>> <>
-    <<255-a4::size(8)>> <>
+    <<255-a1::8>> <>
+    <<255-a2::8>> <>
+    <<255-a3::8>> <>
+    <<255-a4::8>> <>
     encode_int16(port)
   end
 
@@ -280,14 +268,14 @@ defmodule RakNet.Packet do
   Encodes a sequence number. These are three bytes in size.
   """
   def encode_seq_number(num) do
-    <<num::little-size(24)>>
+    <<num::24-little>>
   end
 
   @doc """
   Encodes a reliability flag.
   """
   def encode_reliability(num) do
-    <<Reliability.binary(num)::unsigned-size(3)>>
+    <<Reliability.binary(num)::3-unsigned>>
   end
 
   @doc """

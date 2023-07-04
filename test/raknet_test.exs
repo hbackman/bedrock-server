@@ -28,13 +28,6 @@ defmodule RakNetTest do
   end
 
   @doc """
-  Bitstring data type for the magic RakNet offline bytes.
-  """
-  defmacro magic do
-    quote do: binary-size(16)
-  end
-
-  @doc """
   Bitstring data type for buffers.
   """
   defmacro buffer(string) do
@@ -112,8 +105,8 @@ defmodule RakNetTest do
 
     assert_packet <<
       0x1c::id,
-      _::int64,
-      _::int64,
+      _::64-integer,
+      _::64-integer,
       _::magic,
       ^advertisement::buffer(advertisement),
     >>
@@ -153,7 +146,7 @@ defmodule RakNetTest do
     assert_packet <<
      0x06::id,
      _::magic,
-     _::int64,
+     _::64-integer,
      ^sec::buffer(sec),
      ^mtu::buffer(mtu),
    >>
@@ -189,7 +182,7 @@ defmodule RakNetTest do
     assert_packet <<
       0x08::id,
       _::magic,
-      _::int64,
+      _::64-integer,
       _::ip(4),
       ^mtu::buffer(mtu),
       ^enc::buffer(enc),
@@ -226,8 +219,8 @@ defmodule RakNetTest do
       _::ip(4),
       _::int16,
       ^ips::buffer(ips),
-      _::int64,
-      _::int64,
+      _::64-integer,
+      _::64-integer,
     >>
   end
 

@@ -92,9 +92,9 @@ defmodule BedrockServer.Client do
       |> unbatch()
 
     client = Enum.reduce(packets, client, fn packet, client ->
-      packet = Packet.decode_packet(packet)
-
-      handle_packet(packet, client)
+      packet
+        |> decode_packet()
+        |> handle_packet(client)
     end)
 
     {:noreply, client}
@@ -114,7 +114,7 @@ defmodule BedrockServer.Client do
 
     message = <<>>
       <> Packet.encode_header(:network_settings, 0, 0)
-      <> Packet.encode_ushort(0) # compress everything
+      <> Packet.encode_ushort(1) # compress everything
       <> Packet.encode_ushort(0) # compress using zlib
       <> Packet.encode_bool(false) # Disable throttling
       <> Packet.encode_byte(0)
@@ -124,10 +124,27 @@ defmodule BedrockServer.Client do
     RakNet.Connection.send(client.connection_pid, :reliable_ordered, message)
 
     %{client |
-      compression_enabled: false,
+      compression_enabled: true,
       compression_algorithm: :zlib,
     }
   end
+
+  defp handle_packet(%Packet{
+    packet_id: :login,
+    packet_buf: buffer,
+  }, client) do
+    {protocol, buffer} = Packet.decode_int(buffer)
+    IO.inspect protocol
+    {chain_data, buffer} = Packet.decode_json(buffer)
+
+
+    Hexdump.inspect chain_data
+
+    client
+  end
+
+  defp decode_packet(buffer),
+    do: Packet.decode_packet(buffer)
 
   defp unbatch(buf, packets \\ [])
   defp unbatch("", packets),
@@ -140,16 +157,42 @@ defmodule BedrockServer.Client do
 
   # De-compress a minecraft bedrock packet. Im not sure what other algorithms are
   # available, but right now it only supports zlib.
-  defp inflate(buffer, compression_enabled, compression_algorithm) do
+  def inflate(buffer, compression_enabled, compression_algorithm) do
     if compression_enabled do
       case compression_algorithm do
-        :zlib -> :zlib.uncompress(buffer)
+        :zlib -> zlib_inflate(buffer)
         _     -> buffer
       end
     else
       buffer
     end
   end
+
+  defp zlib_inflate(buffer) do
+    z = :zlib.open()
+
+    :zlib.inflateInit(z, -15)
+
+    uncompressed = :zlib.inflate(z, buffer)
+
+    :zlib.inflateEnd(z)
+
+    uncompressed
+      |> List.flatten()
+      |> Enum.into(<<>>)
+  end
+
+  #defp zlib_deflate(buffer) do
+  #  z = :zlib.open()
+#
+  #  :zlib.deflateInit(z, :default, :deflated, -15, 8, :default)
+#
+  #  [data] = :zlib.deflate(z, buffer, :finish)
+#
+  #  :zlib.deflateEnd(z)
+#
+  #  data
+  #end
 
   #defp deflate(packet) do
   #  :zlib.compress(packet)

@@ -39,7 +39,7 @@ defmodule RakNet.Reliability.Frame do
   defstruct [
     :reliability,
 
-    has_split: 0,
+    has_split: false,
 
     order_index: nil,
     order_channel: 0,

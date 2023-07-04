@@ -27,9 +27,9 @@ defmodule RakNet.Protocol.OpenConnectionReply1 do
   def decode(buffer) do
     <<
       _::magic,
-      server_id::int64,
+      server_id::64-integer,
       use_security::bool,
-      mtu::int16
+      mtu::16-integer
     >> = buffer
 
     use_security = decode_bool(use_security)

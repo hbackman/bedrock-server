@@ -2,7 +2,6 @@ defmodule RakNet.Connection do
   use GenServer, restart: :transient
 
   alias RakNet.Packet
-  alias RakNet.Server
   alias RakNet.Reliability
   alias RakNet.Message
   alias RakNet.Protocol
@@ -13,7 +12,7 @@ defmodule RakNet.Connection do
   import Packet
 
   @sync_ms 50
-  @ping_ms 5000
+  #@ping_ms 5000
 
   defmodule State do
     defstruct [
@@ -173,31 +172,11 @@ defmodule RakNet.Connection do
 
   @impl GenServer
   def handle_cast({type, data}, connection) do
+    connection = if Message.data_packet?(type),
+      do: handle_encapsulated!(data, connection),
+    else: handle_negotiation!(type, data, connection)
 
-    if Message.data_packet?(type) do
-
-      {:noreply, handle_encapsulated!(data, connection)}
-    else
-
-      {:noreply, handle_negotiation!(type, data, connection)}
-    end
-
-    #if Message.data_packet?(message_type) do
-    #  case handle_encapsulated(data, connection) do
-    #    {:ok, connection} ->
-    #      {:noreply, connection}
-    #  end
-    #else
-    #  case handle_packet(message_type, data, connection) do
-    #    {:ok, connection} ->
-    #      {:noreply, connection}
-#
-    #    {:error, _} ->
-    #      Logger.error("Unknown message #{message_type}")
-#
-    #      {:noreply, connection}
-    #  end
-    #end
+    {:noreply, connection}
   end
 
   # Handle an encapsulated message. These are sent after the client has established
@@ -277,7 +256,6 @@ defmodule RakNet.Connection do
       assembled = fragments
         |> Enum.map(& &1.message_buffer)
         |> Enum.join()
-        |> Hexdump.inspect
 
       frame = %Reliability.Frame{
         reliability: frame.reliability,

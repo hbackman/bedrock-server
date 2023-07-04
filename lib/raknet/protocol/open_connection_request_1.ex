@@ -25,7 +25,7 @@ defmodule RakNet.Protocol.OpenConnectionRequest1 do
   def decode(buffer) do
     <<
       _::magic,
-      protocol::int8,
+      protocol::8-integer,
       mtu_buf::binary
     >> = buffer
 
