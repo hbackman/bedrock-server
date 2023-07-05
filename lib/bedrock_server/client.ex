@@ -32,8 +32,11 @@ end
 defmodule BedrockServer.Client do
   use GenServer
 
-  alias BedrockServer.Packet
   alias BedrockServer.Client.State
+  alias BedrockServer.Zlib
+  alias BedrockServer.Packet
+
+  require Logger
 
   @doc """
   Starts the client without linking.
@@ -76,6 +79,11 @@ defmodule BedrockServer.Client do
     Registry.unregister(__MODULE__, session_id)
   end
 
+  # Log a message with the client prefixed.
+  defp log(client, level, message) do
+    Logger.log(level, "[BedrockServer] " <> message)
+  end
+
   # ---------------------------------------------------------------------------
   # Server Implementation
   # ---------------------------------------------------------------------------
@@ -101,9 +109,11 @@ defmodule BedrockServer.Client do
   end
 
   defp handle_packet(%Packet{
-    packet_id: :network_setting_request,
+    packet_id: :network_settings_request,
     packet_buf: _packet_buf
   }, client) do
+    log(client, :debug, "Received :network_settings_request packet.")
+
     # | Field Name                | Type  |
     # |---------------------------|-------|
     # | Compression Threshold     | short |
@@ -119,9 +129,8 @@ defmodule BedrockServer.Client do
       <> Packet.encode_bool(false) # Disable throttling
       <> Packet.encode_byte(0)
       <> Packet.encode_float(0)
-      |> Packet.encode_batch()
 
-    RakNet.Connection.send(client.connection_pid, :reliable_ordered, message)
+    send_packet(client, message)
 
     %{client |
       compression_enabled: true,
@@ -133,34 +142,95 @@ defmodule BedrockServer.Client do
     packet_id: :login,
     packet_buf: buffer,
   }, client) do
-    {protocol, buffer} = Packet.decode_int(buffer)
-    IO.inspect protocol
-    {chain_data, buffer} = Packet.decode_json(buffer)
+    log(client, :debug, "Received :login packet.")
 
+    #{_, buffer} = Packet.decode_int(buffer)  # Protocol
+    #
+    ## Not sure why we need to do this.
+    #{_, buffer} = Packet.decode_uvarint(buffer)
+    #
+    #{_, buffer} = Packet.decode_ascii(buffer) # Chain data
+    #{_, buffer} = Packet.decode_ascii(buffer) # Skin data
 
-    Hexdump.inspect chain_data
+    message = <<>>
+      <> Packet.encode_header(:play_status)
+      <> Packet.encode_int(1) # Login Success
+
+    send_packet(client, message)
+
+    # Resource Packs Info
+    #
+    # boolean :: Forced To Accept
+    # boolean :: Scripting Enabled
+    # ResourcePackInfo[] :: BehahaviorPackInfos
+    # ResourcePackInfo[] :: ResourcePackInfos
+
+    #message = <<>>
+    #  <> <<Packet.to_binary(:resource_packs_info)::32-integer-little>>
+    #  <> Packet.encode_bool(false)
+    #  <> Packet.encode_bool(false)
+    #  <> Packet.encode_byte(0)
+    #  <> Packet.encode_byte(0)
+#
+    #send_packet(client, message)
+
+    #message = <<>>
+    #  <> Packet.encode_header(:resource_packs_info, 0, 0)
+    #  <> Packet.encode_bool(false)
+
+    # Disconnect
+    #   Sent by the server to disconnect a client.
+    #
+    # boolean :: Hide disconnect screen
+    # boolean :: Kick message
+
+    # message = <<>>
+    #   <> Packet.encode_header(:disconnect, 0, 0)
+    #   <> Packet.encode_bool(false)
+    #   <> Packet.encode_string("gtfo")
+    #
+    # send_packet(client, message)
 
     client
   end
 
+  # Send a packet through RakNet.
+  #
+  defp send_packet(client, message, reliability \\ :reliable_ordered)
+  defp send_packet(client, message, reliability) do
+    message = message
+      |> encode_batch()
+      |> deflate(client.compression_enabled, client.compression_algorithm)
+
+    message = <<0xfe>> <> message
+
+    RakNet.Connection.send(client.connection_pid, reliability, message)
+  end
+
+  defp encode_batch(buffer),
+    do: Packet.encode_batch(buffer)
+
   defp decode_packet(buffer),
     do: Packet.decode_packet(buffer)
 
-  defp unbatch(buf, packets \\ [])
-  defp unbatch("", packets),
+  # Unpack a packet batch.
+  #
+  def unbatch(buf, packets \\ [])
+  def unbatch("", packets),
     do: Enum.reverse(packets)
 
-  defp unbatch(buf, packets) do
-    {str, buf} = RakNet.Packet.decode_string(buf)
+  def unbatch(buf, packets) do
+    {str, buf} = Packet.decode_string(buf)
     unbatch(buf, [str | packets])
   end
 
   # De-compress a minecraft bedrock packet. Im not sure what other algorithms are
   # available, but right now it only supports zlib.
+  #
   def inflate(buffer, compression_enabled, compression_algorithm) do
     if compression_enabled do
       case compression_algorithm do
-        :zlib -> zlib_inflate(buffer)
+        :zlib -> Zlib.inflate(buffer)
         _     -> buffer
       end
     else
@@ -168,33 +238,14 @@ defmodule BedrockServer.Client do
     end
   end
 
-  defp zlib_inflate(buffer) do
-    z = :zlib.open()
-
-    :zlib.inflateInit(z, -15)
-
-    uncompressed = :zlib.inflate(z, buffer)
-
-    :zlib.inflateEnd(z)
-
-    uncompressed
-      |> List.flatten()
-      |> Enum.into(<<>>)
+  def deflate(buffer, compression_enabled, compression_algorithm) do
+    if compression_enabled do
+      case compression_algorithm do
+        :zlib -> Zlib.deflate(buffer)
+        _     -> buffer
+      end
+    else
+      buffer
+    end
   end
-
-  #defp zlib_deflate(buffer) do
-  #  z = :zlib.open()
-#
-  #  :zlib.deflateInit(z, :default, :deflated, -15, 8, :default)
-#
-  #  [data] = :zlib.deflate(z, buffer, :finish)
-#
-  #  :zlib.deflateEnd(z)
-#
-  #  data
-  #end
-
-  #defp deflate(packet) do
-  #  :zlib.compress(packet)
-  #end
 end

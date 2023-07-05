@@ -4,6 +4,7 @@ defmodule RakNet.Packet do
   Base serialization and deserialization routines for packets.
   """
 
+  require RakNet.Packet
   alias RakNet.Reliability
   alias RakNet.Message
 
