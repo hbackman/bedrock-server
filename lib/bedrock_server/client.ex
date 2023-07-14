@@ -154,7 +154,7 @@ defmodule BedrockServer.Client do
 
     message = <<>>
       <> Packet.encode_header(:play_status)
-      <> Packet.encode_int(1) # Login Success
+      <> Packet.encode_int(6) # Login Success
 
     send_packet(client, message)
 

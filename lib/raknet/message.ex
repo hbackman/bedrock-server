@@ -60,6 +60,9 @@ defmodule RakNet.Message do
     binary(message_id) <= binary(:data_packet_F)
   end
 
+  def game_packet?(message_id),
+    do: message_id == :game_packet
+
   @doc """
   The message atom name for the message. Default to :error.
   """

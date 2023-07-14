@@ -24,14 +24,59 @@ defmodule RakNet.Reliability do
     Map.fetch!(@reliability_map, value)
   end
 
-  def is_reliable?(value) when is_integer(value), do: value in [2, 3, 4, 6, 7]
-  def is_reliable?(value) when is_atom(value), do: is_reliable?(binary(value))
+  @doc """
+  Checks if the value indicates a reliable packet.
+  """
+  def reliable?(value) when is_integer(value),
+    do: reliable?(name(value))
 
-  def is_ordered?(value) when is_integer(value), do: value == 3
-  def is_ordered?(value) when is_atom(value), do: is_ordered?(binary(value))
+  def reliable?(value) when is_atom(value) do
+    Enum.member?([
+      :reliable,
+      :reliable_ordered,
+      :reliable_sequenced,
+      :reliable_ack_receipt,
+      :reliable_ordered_ack_receipt,
+    ], value)
+  end
 
-  def is_sequenced?(value) when is_integer(value), do: value in [1, 3, 4, 7]
-  def is_sequenced?(value) when is_atom(value), do: is_sequenced?(binary(value))
+  @doc """
+  Checks if the value indicates an ordered packet.
+  """
+  def ordered?(value) when is_integer(value),
+    do: ordered?(name(value))
+
+  def ordered?(value) when is_atom(value) do
+    Enum.member?([
+      :reliable_ordered,
+      :reliable_ordered_ack_receipt,
+    ], value)
+  end
+
+  @doc """
+  Checks if the value indicates a sequenced packet.
+  """
+  def sequenced?(value) when is_integer(value),
+    do: sequenced?(name(value))
+
+  def sequenced?(value) when is_atom(value) do
+    Enum.member?([
+      :reliable_sequenced,
+      :unreliable_sequenced,
+    ], value)
+  end
+
+  def sequenced_or_ordered?(value) when is_integer(value),
+    do: sequenced_or_ordered?(name(value))
+
+  def sequenced_or_ordered?(value) when is_atom(value) do
+    Enum.member?([
+      :unreliable_sequenced,
+      :reliable_sequenced,
+      :reliable_ordered,
+      :reliable_ordered_ack_receipt,
+    ], value)
+  end
 
 end
 

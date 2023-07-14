@@ -11,7 +11,7 @@ defmodule RakNet.Connection do
 
   import Packet
 
-  @sync_ms 50
+  @sync_ms 200
   #@ping_ms 5000
 
   defmodule State do
@@ -20,17 +20,19 @@ defmodule RakNet.Connection do
       port: nil,
       send: nil,
       server_identifier: nil,
-      packet_buffer: [],
-      packet_sequence: 0,
-      message_index: 0,
       client_module: nil,
       client_data: %{},
       client: nil,
       # The :os.system_time(:millisecond) time at which we were created.
       base_time: 0,
-      ordered_write_index: 0,
-      # Sequencing for whole messages.
-      send_sequence: 0,
+
+      # The enqueued packets.
+      packet_buffer: [],
+
+      sequence_index: 0,
+      order_index: -1,
+      message_index: 0,
+
       ack_buffer: [],
       split_buffer: [],
     ]
@@ -74,27 +76,52 @@ defmodule RakNet.Connection do
   @doc """
   Enqueue a packet.
   """
-  def enqueue(connection, reliability, buffer) when is_atom(reliability) and is_bitstring(buffer),
-    do: enqueue(connection, reliability, [buffer])
-
   def enqueue(connection, reliability, buffers) when is_atom(reliability) and is_list(buffers) do
-    num_buffers = length(buffers)
-    new_buffers = buffers
-      |> Enum.zip(0..(num_buffers - 1))
-      |> Enum.map(fn {buffer, idx} ->
-        %Reliability.Frame{
-          reliability: reliability,
-          message_buffer: buffer,
-          message_index: if(Reliability.is_reliable?(reliability), do: connection.message_index, else: nil),
-          order_index: connection.ordered_write_index,
-          sequencing_index: connection.packet_sequence + idx,
-        }
-      end)
+    Enum.reduce(buffers, connection, fn buffer, connection ->
+      enqueue(connection, reliability, buffer)
+    end)
+  end
 
-    %{ connection |
-      packet_buffer: connection.packet_buffer ++ new_buffers,
-      packet_sequence: connection.packet_sequence + num_buffers,
+  def enqueue(connection, reliability, buffer) when is_atom(reliability) and is_bitstring(buffer) do
+    frame = %Reliability.Frame{
+      reliability: reliability,
+      message_buffer: buffer,
     }
+
+    frame = if Reliability.ordered?(reliability),
+      do: frame
+        |> Map.put(:order_index, connection.order_index + 1),
+    else: frame
+
+    frame = if Reliability.sequenced?(reliability),
+      do: frame
+        |> Map.put(:order_index, connection.order_index),
+    else: frame
+
+    frame = if Reliability.reliable?(reliability),
+      do: frame
+        |> Map.put(:message_index, connection.message_index + 1),
+    else: frame
+
+    %{connection |
+      packet_buffer: connection.packet_buffer ++ [frame],
+      order_index: max_nil_safe(connection.order_index, frame.order_index),
+      message_index: max_nil_safe(connection.message_index, frame.message_index),
+    }
+  end
+
+  # Check which of the two values are bigger. If one is `nil`, then use
+  # the other, and vice versa.
+  #
+  defp max_nil_safe(v1, v2) do
+    cond do
+      is_nil(v1) and is_nil(v2) ->
+        nil
+      is_nil(v1) -> v2
+      is_nil(v2) -> v1
+      true ->
+        max(v1, v2)
+    end
   end
 
   defp sync_enqueued_packets(connection) do
@@ -105,13 +132,13 @@ defmodule RakNet.Connection do
     else
       <<>>
         <> Packet.encode_msg(:data_packet_0)
-        <> Packet.encode(buffer, connection.send_sequence)
+        <> Packet.encode(buffer, connection.sequence_index)
+        |> IO.inspect
         |> connection.send.()
 
-      %{ connection |
+      %{connection |
         packet_buffer: [],
-        send_sequence: connection.send_sequence + 1,
-        message_index: connection.message_index + 1,
+        sequence_index: connection.sequence_index + 1,
       }
     end
   end

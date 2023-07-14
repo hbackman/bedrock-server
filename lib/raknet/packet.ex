@@ -65,30 +65,33 @@ defmodule RakNet.Packet do
     # Decode reliability.
     <<reliability::3-unsigned, has_split::5-unsigned, data::binary>> = data
 
-    is_reliable = Reliability.is_reliable?(reliability)
-    is_sequenced = Reliability.is_sequenced?(reliability)
-
     # Decode the length.
     <<length::size(16), data::binary>> = data
     length = trunc(Float.ceil(length / 8))
 
-    # Decode sequence.
-    {message_index, data} =
-      if is_sequenced or is_reliable do
+    # Decode message index.
+    {message_index, data} = if Reliability.reliable?(reliability) do
         <<message_index::24-little, rest::binary>> = data
         {message_index, rest}
       else
         {nil, data}
       end
 
+    # Decode sequence.
+    {sequencing_index, data} = if Reliability.sequenced?(reliability) do
+       <<sequencing_index::24-little, rest::binary>> = data
+       {sequencing_index, rest}
+    else
+      {nil, data}
+    end
+
     # Decode order.
-    {order_index, order_channel, data} =
-      if is_sequenced do
-        <<order_index::24-little, order_channel::8, rest::binary>> = data
-        {order_index, order_channel, rest}
-      else
-        {nil, nil, data}
-      end
+    {order_index, order_channel, data} = if Reliability.ordered?(reliability) do
+      <<order_index::24-little, order_channel::8, rest::binary>> = data
+      {order_index, order_channel, rest}
+    else
+      {nil, nil, data}
+    end
 
     # Decode split.
     {split_count, split_id, split_index, data} =
@@ -122,8 +125,8 @@ defmodule RakNet.Packet do
       split_count: split_count,
       split_index: split_index,
 
-      sequencing_index: if(is_reliable, do: nil, else: message_index),
-      message_index: if(is_reliable, do: message_index, else: nil),
+      sequencing_index: sequencing_index,
+      message_index: message_index,
       message_length: length,
       message_buffer: buffer,
     }, rest}
@@ -185,13 +188,6 @@ defmodule RakNet.Packet do
   Encode encapsulated messages.
   """
   def encode_encapsulated(frame = %Reliability.Frame{}) do
-    is_reliable = Reliability.is_reliable?(frame.reliability)
-    is_sequenced = Reliability.is_sequenced?(frame.reliability)
-
-    index = if is_reliable,
-      do: frame.message_index,
-    else: frame.sequencing_index
-
     has_split = if frame.has_split,
       do: 1,
     else: 0
@@ -201,21 +197,34 @@ defmodule RakNet.Packet do
       has_split::5-unsigned,
     >>
 
-    message = <<
-      trunc(byte_size(frame.message_buffer) * 8)::size(16)
-    >><> if is_reliable or is_sequenced do
-        <<index::24-little>> <>
-          if is_sequenced do
-            <<
-              frame.order_index::24-little,
-              frame.order_channel::8
-            >>
+    message = <<>>
+      <> <<trunc(byte_size(frame.message_buffer) * 8)::size(16)>>
+
+      # Encode message index.
+      <> if Reliability.reliable?(frame.reliability) do
+        <<frame.message_index::24-little>>
           else
             <<>>
           end
+
+      # Encode sequence index.
+      <> if Reliability.sequenced?(frame.reliability) do
+        <<frame.sequencing_index::24-little>>
       else
         <<>>
       end
+
+      # Encode order.
+      <> if Reliability.ordered?(frame.reliability) do
+        <<
+          frame.order_index::24-little,
+          frame.order_channel::8,
+        >>
+      else
+        <<>>
+      end
+
+      # Encode split.
       <> if frame.has_split do
         <<
           frame.split_count::32,
