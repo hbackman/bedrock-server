@@ -18,12 +18,13 @@ defmodule BedrockServer.Packet do
 
     :network_settings => 0x8f,
     :network_settings_request => 0xc1,
+
+    :client_cache_status => 0x81,
+
+    :packet_violation_warning => 0x9c,
   }
 
   defstruct [
-    #:sender_sub_id,
-    #:recipient_sub_id,
-
     packet_id: nil,
     packet_buf: nil,
   ]
@@ -149,6 +150,9 @@ defmodule BedrockServer.Packet do
   """
   def encode_int(v),
     do: <<v::32-integer>>
+
+  def encode_intle(v),
+    do: <<v::32-integer-little>>
 
   def encode_uint(v),
     do: <<v::32-integer-unsigned>>

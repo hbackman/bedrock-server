@@ -80,7 +80,7 @@ defmodule BedrockServer.Client do
   end
 
   # Log a message with the client prefixed.
-  defp log(client, level, message) do
+  defp log(_client, level, message) do
     Logger.log(level, "[BedrockServer] " <> message)
   end
 
@@ -114,23 +114,12 @@ defmodule BedrockServer.Client do
   }, client) do
     log(client, :debug, "Received :network_settings_request packet.")
 
-    # | Field Name                | Type  |
-    # |---------------------------|-------|
-    # | Compression Threshold     | short |
-    # | Compression Algorithm     | short |
-    # | Client Throttling         | bool  |
-    # | Client Throttle Threshold | byte  |
-    # | Client Throttle Scalar    | float |
+    settings = %BedrockServer.Protocol.NetworkSettings{
+      compression_threshold: 1,
+      compression_algorithm: 0,
+    }
 
-    message = <<>>
-      <> Packet.encode_header(:network_settings, 0, 0)
-      <> Packet.encode_ushort(1) # compress everything
-      <> Packet.encode_ushort(0) # compress using zlib
-      <> Packet.encode_bool(false) # Disable throttling
-      <> Packet.encode_byte(0)
-      <> Packet.encode_float(0)
-
-    send_packet(client, message)
+    send_packet(client, settings)
 
     %{client |
       compression_enabled: true,
@@ -140,56 +129,69 @@ defmodule BedrockServer.Client do
 
   defp handle_packet(%Packet{
     packet_id: :login,
-    packet_buf: buffer,
+    packet_buf: _buffer,
   }, client) do
     log(client, :debug, "Received :login packet.")
 
-    #{_, buffer} = Packet.decode_int(buffer)  # Protocol
-    #
-    ## Not sure why we need to do this.
-    #{_, buffer} = Packet.decode_uvarint(buffer)
-    #
-    #{_, buffer} = Packet.decode_ascii(buffer) # Chain data
-    #{_, buffer} = Packet.decode_ascii(buffer) # Skin data
+    # Send a login success message.
 
-    message = <<>>
-      <> Packet.encode_header(:play_status)
-      <> Packet.encode_int(6) # Login Success
+    status = %BedrockServer.Protocol.PlayStatus{
+      status: :login_success,
+    }
 
-    send_packet(client, message)
+    send_packet(client, status)
 
-    # Resource Packs Info
-    #
-    # boolean :: Forced To Accept
-    # boolean :: Scripting Enabled
-    # ResourcePackInfo[] :: BehahaviorPackInfos
-    # ResourcePackInfo[] :: ResourcePackInfos
+    # Send Resource Packs Info and Resource Pack Stack. We do not care about
+    # the responses for these so we can send them at the same time.
 
-    #message = <<>>
-    #  <> <<Packet.to_binary(:resource_packs_info)::32-integer-little>>
-    #  <> Packet.encode_bool(false)
-    #  <> Packet.encode_bool(false)
-    #  <> Packet.encode_byte(0)
-    #  <> Packet.encode_byte(0)
-#
-    #send_packet(client, message)
-
-    #message = <<>>
-    #  <> Packet.encode_header(:resource_packs_info, 0, 0)
-    #  <> Packet.encode_bool(false)
+    send_packet(client, %BedrockServer.Protocol.ResourcePacksInfo{})
+    send_packet(client, %BedrockServer.Protocol.ResourcePackStack{})
 
     # Disconnect
-    #   Sent by the server to disconnect a client.
-    #
-    # boolean :: Hide disconnect screen
-    # boolean :: Kick message
 
-    # message = <<>>
-    #   <> Packet.encode_header(:disconnect, 0, 0)
-    #   <> Packet.encode_bool(false)
-    #   <> Packet.encode_string("gtfo")
-    #
-    # send_packet(client, message)
+    kick = %BedrockServer.Protocol.Disconnect{
+      hide_screen: false,
+      kick_message: "gtfo",
+    }
+
+    send_packet(client, kick)
+
+    client
+  end
+
+  defp handle_packet(%Packet{
+    packet_id: :resource_packs_client_response,
+    packet_buf: _buffer,
+  }, client) do
+    log(client, :debug, "Received :resource_packs_client_response.")
+
+    # We do not do anything with this at the moment.
+
+    client
+  end
+
+  defp handle_packet(%Packet{
+    packet_id: :packet_violation_warning,
+    packet_buf: _buffer,
+  }, client) do
+    log(client, :warn, "Received :packet_violation_warning")
+
+    client
+  end
+
+  defp handle_packet(%Packet{
+    packet_id: :client_cache_status,
+    packet_buf: _buffer,
+  }, client) do
+    log(client, :debug, "Received :client_cache_status packet.")
+
+    # The server does not support caching. Before I decide to implement this,
+    # it might not be worth it. Because it is not supported on the switch.
+    message = <<>>
+      <> Packet.encode_header(:client_cache_status)
+      <> Packet.encode_bool(false)
+
+    send_packet(client, message)
 
     client
   end
@@ -197,7 +199,7 @@ defmodule BedrockServer.Client do
   # Send a packet through RakNet.
   #
   defp send_packet(client, message, reliability \\ :reliable_ordered)
-  defp send_packet(client, message, reliability) do
+  defp send_packet(client, message, reliability) when is_binary(message) do
     message = message
       |> encode_batch()
       |> deflate(client.compression_enabled, client.compression_algorithm)
@@ -205,6 +207,16 @@ defmodule BedrockServer.Client do
     message = <<0xfe>> <> message
 
     RakNet.Connection.send(client.connection_pid, reliability, message)
+
+    client
+  end
+
+  # If the packet is passed instead of binary, then encode it and send it normally.
+  #
+  defp send_packet(client, %struct{} = message, reliability) do
+    {:ok, buffer} = struct.encode(message)
+
+    send_packet(client, buffer, reliability)
   end
 
   defp encode_batch(buffer),
