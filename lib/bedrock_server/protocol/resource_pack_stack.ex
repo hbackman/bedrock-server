@@ -9,13 +9,14 @@ defmodule BedrockServer.Protocol.ResourcePackStack do
   | Experiments         | Experiements        | Not supported. |
   """
 
-  defstruct []
-
+  alias BedrockServer.Protocol.Packet
   import BedrockServer.Packet
 
-  @doc """
-  Encode a resource pack stack packet.
-  """
+  @behaviour Packet
+
+  defstruct []
+
+  @impl Packet
   def encode(%__MODULE__{} = _packet) do
     buffer = <<>>
       <> encode_header(:resource_pack_stack)
@@ -26,5 +27,10 @@ defmodule BedrockServer.Protocol.ResourcePackStack do
       <> encode_intle(0)
       <> encode_bool(false)
     {:ok, buffer}
+  end
+
+  @impl Packet
+  def decode(_buffer) do
+    {:ok, %__MODULE__{}}
   end
 end

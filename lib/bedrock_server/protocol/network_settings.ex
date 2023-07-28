@@ -10,6 +10,11 @@ defmodule BedrockServer.Protocol.NetworkSettings do
   | Client Throttle Scalar    | float   |                |
   """
 
+  alias BedrockServer.Protocol.Packet
+  import BedrockServer.Packet
+
+  @behaviour Packet
+
   defstruct [
     :compression_threshold,
     :compression_algorithm,
@@ -20,11 +25,7 @@ defmodule BedrockServer.Protocol.NetworkSettings do
     client_throttle_scalar: 0,
   ]
 
-  import BedrockServer.Packet
-
-  @doc """
-  Encode a disconnect packet.
-  """
+  @impl Packet
   def encode(%__MODULE__{} = packet) do
     buffer = <<>>
       <> encode_header(:network_settings)
@@ -34,5 +35,10 @@ defmodule BedrockServer.Protocol.NetworkSettings do
       <> encode_byte(packet.client_throttle_threshold)
       <> encode_float(packet.client_throttle_scalar)
     {:ok, buffer}
+  end
+
+  @impl Packet
+  def decode(_buffer) do
+    {:ok, %__MODULE__{}}
   end
 end

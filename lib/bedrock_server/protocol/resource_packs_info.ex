@@ -10,13 +10,14 @@ defmodule BedrockServer.Protocol.ResourcePacksInfo do
   | Resource Packs     | ResourcePack[] | Not supported. |
   """
 
-  defstruct []
-
+  alias BedrockServer.Protocol.Packet
   import BedrockServer.Packet
 
-  @doc """
-  Encode a resource packs info packet.
-  """
+  @behaviour Packet
+
+  defstruct []
+
+  @impl Packet
   def encode(%__MODULE__{} = _packet) do
     buffer = <<>>
       <> encode_header(:resource_packs_info)
@@ -28,4 +29,8 @@ defmodule BedrockServer.Protocol.ResourcePacksInfo do
     {:ok, buffer}
   end
 
+  @impl Packet
+  def decode(_buffer) do
+    {:ok, %__MODULE__{}}
+  end
 end

@@ -6,20 +6,26 @@ defmodule BedrockServer.Protocol.PlayStatus do
   | Status       | status |                |
   """
 
+  alias BedrockServer.Protocol.Packet
+  import BedrockServer.Packet
+
+  @behaviour Packet
+
   defstruct [
     :status,
   ]
 
-  import BedrockServer.Packet
-
-  @doc """
-  Encode a play status packet.
-  """
+  @impl Packet
   def encode(%__MODULE__{} = packet) do
     buffer = <<>>
       <> encode_header(:play_status)
       <> encode_play_status(packet.status)
     {:ok, buffer}
+  end
+
+  @impl Packet
+  def decode(_buffer) do
+    {:ok, %__MODULE__{}}
   end
 
   defp encode_play_status(status) do

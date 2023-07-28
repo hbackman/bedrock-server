@@ -6,21 +6,16 @@ defmodule BedrockServer.Packet do
 
   @packet_ids %{
     :batch => 0xfe,
-
     :login => 0x01,
     :play_status => 0x02,
-
     :disconnect => 0x05,
-
     :resource_packs_info => 0x06,
     :resource_pack_stack => 0x07,
     :resource_packs_client_response => 0x08,
-
+    :start_game => 0x0b,
     :network_settings => 0x8f,
     :network_settings_request => 0xc1,
-
     :client_cache_status => 0x81,
-
     :packet_violation_warning => 0x9c,
   }
 

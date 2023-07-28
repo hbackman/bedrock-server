@@ -7,16 +7,17 @@ defmodule BedrockServer.Protocol.Disconnect do
   | Kick Message | string  |                |
   """
 
+  alias BedrockServer.Protocol.Packet
+  import BedrockServer.Packet
+
+  @behaviour Packet
+
   defstruct [
     hide_screen: false,
     kick_message: nil
   ]
 
-  import BedrockServer.Packet
-
-  @doc """
-  Encode a disconnect packet.
-  """
+  @impl Packet
   def encode(%__MODULE__{} = packet) do
     buffer = <<>>
       <> encode_header(:disconnect)
@@ -27,5 +28,10 @@ defmodule BedrockServer.Protocol.Disconnect do
     else: buffer
 
     {:ok, buffer}
+  end
+
+  @impl Packet
+  def decode(_buffer) do
+    {:ok, %__MODULE__{}}
   end
 end
