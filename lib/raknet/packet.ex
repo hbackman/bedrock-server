@@ -5,6 +5,7 @@ defmodule RakNet.Packet do
   """
 
   require RakNet.Packet
+
   alias RakNet.Reliability
   alias RakNet.Message
 
@@ -13,6 +14,16 @@ defmodule RakNet.Packet do
   # ------------------------------------------------------------
   # Macros
   # ------------------------------------------------------------
+
+  @doc """
+  Macro for smaller decoders.
+  """
+  defmacro decode_using(buffer, type) do
+    quote do
+      <<v::unquote(type), r::binary>> = unquote(buffer)
+      {v, r}
+    end
+  end
 
   defmacro timestamp do
     quote do: size(64)
@@ -48,88 +59,17 @@ defmodule RakNet.Packet do
   # Decode
   # ------------------------------------------------------------
 
+  @doc """
+  Decode a buffer containing packets.
+  """
   def decode_packets(data, packets \\ [])
   def decode_packets("", packets) do
     Enum.reverse(packets)
   end
 
   def decode_packets(data, packets) do
-    {packet, rest} = decode_encapsulated(data)
+    {packet, rest} = RakNet.Reliability.Frame.decode(data)
     decode_packets(rest, [packet | packets])
-  end
-
-  @doc """
-  Decode encapsulated messages.
-  """
-  def decode_encapsulated(data) do
-    # Decode reliability.
-    <<reliability::3-unsigned, has_split::5-unsigned, data::binary>> = data
-
-    # Decode the length.
-    <<length::size(16), data::binary>> = data
-    length = trunc(Float.ceil(length / 8))
-
-    # Decode message index.
-    {message_index, data} = if Reliability.reliable?(reliability) do
-        <<message_index::24-little, rest::binary>> = data
-        {message_index, rest}
-      else
-        {nil, data}
-      end
-
-    # Decode sequence.
-    {sequencing_index, data} = if Reliability.sequenced?(reliability) do
-       <<sequencing_index::24-little, rest::binary>> = data
-       {sequencing_index, rest}
-    else
-      {nil, data}
-    end
-
-    # Decode order.
-    {order_index, order_channel, data} = if Reliability.ordered?(reliability) do
-      <<order_index::24-little, order_channel::8, rest::binary>> = data
-      {order_index, order_channel, rest}
-    else
-      {nil, nil, data}
-    end
-
-    # Decode split.
-    {split_count, split_id, split_index, data} =
-      if has_split > 0 do
-        <<
-          split_count::32,
-          split_id   ::16,
-          split_index::32,
-          rest::binary
-        >> = data
-        {split_count, split_id, split_index, rest}
-      else
-        {nil, nil, nil, data}
-      end
-
-    <<buffer::binary-size(length), rest::binary>> = data
-
-    # The message is sometimes a minecraft specific message. This doesnt match anything
-    # in the message module. I will probably have to wait unwrapping the message id so
-    # that a custom packet can implement the lookup.
-
-    {%Reliability.Frame{
-      reliability: Reliability.name(reliability),
-
-      has_split: has_split > 0,
-
-      order_index: order_index,
-      order_channel: order_channel,
-
-      split_id: split_id,
-      split_count: split_count,
-      split_index: split_index,
-
-      sequencing_index: sequencing_index,
-      message_index: message_index,
-      message_length: length,
-      message_buffer: buffer,
-    }, rest}
   end
 
   @doc """
@@ -154,7 +94,7 @@ defmodule RakNet.Packet do
   Decodes a string.
   """
   def decode_string(data) do
-    {strlen, data} = decode_varint(data)
+    {strlen, data} = decode_int16(data)
     <<string::binary-size(strlen), rest::binary>> = data
     {string, rest}
   end
@@ -171,71 +111,25 @@ defmodule RakNet.Packet do
   def decode_bool(0), do: false
   def decode_bool(1), do: true
 
+  def decode_int8(value),  do: decode_using(value,  8-integer)
+  def decode_int16(value), do: decode_using(value, 16-integer)
+  def decode_int24(value), do: decode_using(value, 24-integer)
+  def decode_int64(value), do: decode_using(value, 64-integer)
+
   # ------------------------------------------------------------
   # Encode
   # ------------------------------------------------------------
 
-  def encode(packets, seq) when is_list(packets) do
+  @doc """
+  Encode a batch of frames.
+  """
+  def encode_packets(packets, seq) when is_list(packets) do
     :erlang.iolist_to_binary([
       encode_seq_number(seq),
       Enum.map(packets, fn packet ->
-        encode_encapsulated(packet)
+        RakNet.Reliability.Frame.encode(packet)
       end)
     ])
-  end
-
-  @doc """
-  Encode encapsulated messages.
-  """
-  def encode_encapsulated(frame = %Reliability.Frame{}) do
-    has_split = if frame.has_split,
-      do: 1,
-    else: 0
-
-    header = <<
-      Reliability.binary(frame.reliability)::3-unsigned,
-      has_split::5-unsigned,
-    >>
-
-    message = <<>>
-      <> <<trunc(byte_size(frame.message_buffer) * 8)::size(16)>>
-
-      # Encode message index.
-      <> if Reliability.reliable?(frame.reliability) do
-        <<frame.message_index::24-little>>
-          else
-            <<>>
-          end
-
-      # Encode sequence index.
-      <> if Reliability.sequenced?(frame.reliability) do
-        <<frame.sequencing_index::24-little>>
-      else
-        <<>>
-      end
-
-      # Encode order.
-      <> if Reliability.ordered?(frame.reliability) do
-        <<
-          frame.order_index::24-little,
-          frame.order_channel::8,
-        >>
-      else
-        <<>>
-      end
-
-      # Encode split.
-      <> if frame.has_split do
-        <<
-          frame.split_count::32,
-          frame.split_id::16,
-          frame.split_index::32,
-        >>
-      else
-        <<>>
-      end
-
-    header <> message <> frame.message_buffer
   end
 
   @doc """
@@ -252,9 +146,6 @@ defmodule RakNet.Packet do
   def encode_bool(false), do: <<0>>
   def encode_bool(true),  do: <<1>>
 
-  def encode_byte(value),
-    do: <<value::1>>
-
   def encode_int8(value),  do: <<value:: 8-integer>>
   def encode_int16(value), do: <<value::16-integer>>
   def encode_int24(value), do: <<value::24-integer>>
@@ -266,7 +157,7 @@ defmodule RakNet.Packet do
   def encode_ip(4, address, port) do
     {a1, a2, a3, a4} = address
 
-    encode_int8(4)     <>
+    encode_int8(4) <>
     <<255-a1::8>> <>
     <<255-a2::8>> <>
     <<255-a3::8>> <>
@@ -282,6 +173,13 @@ defmodule RakNet.Packet do
   end
 
   @doc """
+  Encodes a timestamp.
+  """
+  def encode_timestamp(time) do
+    <<time::timestamp>>
+  end
+
+  @doc """
   Encodes a reliability flag.
   """
   def encode_reliability(num) do
@@ -294,12 +192,4 @@ defmodule RakNet.Packet do
   def encode_msg(id) do
     <<Message.binary(id)>>
   end
-
-  @doc """
-  Encodes a timestamp.
-  """
-  def encode_timestamp(time) do
-    <<time::timestamp>>
-  end
-
 end

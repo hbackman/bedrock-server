@@ -149,12 +149,12 @@ defmodule BedrockServer.Client do
 
     # Disconnect
 
-    # kick = %BedrockServer.Protocol.Disconnect{
-    #   hide_screen: false,
-    #   kick_message: "gtfo",
-    # }
-    #
-    # send_packet(client, kick)
+    kick = %BedrockServer.Protocol.Disconnect{
+      hide_screen: false,
+      kick_message: "gtfo",
+    }
+
+    send_packet(client, kick)
 
     client
   end

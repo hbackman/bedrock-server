@@ -49,7 +49,7 @@ defmodule RakNet.Message do
     :nack => 0xA0,
     :ack  => 0xC0,
 
-    :game_packet   => 0xFE,
+    :game_packet => 0xFE,
   }
 
   @doc """

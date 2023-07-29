@@ -1,4 +1,4 @@
-defmodule RakNetTest.Protocol.OpenConnectionRequest2Test do
+defmodule RakNet.Protocol.OpenConnectionRequest2Test do
   use ExUnit.Case
 
   alias RakNet.Protocol.OpenConnectionRequest2

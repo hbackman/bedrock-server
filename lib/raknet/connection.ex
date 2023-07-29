@@ -132,7 +132,7 @@ defmodule RakNet.Connection do
     else
       <<>>
         <> Packet.encode_msg(:data_packet_0)
-        <> Packet.encode(buffer, connection.sequence_index)
+        <> Packet.encode_packets(buffer, connection.sequence_index)
         |> IO.inspect
         |> connection.send.()
 
